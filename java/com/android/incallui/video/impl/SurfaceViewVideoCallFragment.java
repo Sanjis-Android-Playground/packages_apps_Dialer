@@ -421,7 +421,7 @@ public class SurfaceViewVideoCallFragment extends Fragment
 
   private boolean shouldHideCallStatusBar() {
     return PreferenceManager.getDefaultSharedPreferences(requireContext())
-        .getBoolean(PREF_HIDE_CALL_STATUS_BAR, true);
+        .getBoolean(PREF_HIDE_CALL_STATUS_BAR, false);
   }
 
   private Point getControlsOffsetEndHidden(View controls) {

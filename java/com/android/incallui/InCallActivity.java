@@ -196,6 +196,18 @@ public class InCallActivity extends TransactionSafeFragmentActivity
     setWindowFlags();
     setContentView(R.layout.incall_screen);
 
+    // Start from the Penguin call gradient so the surface is never a black window while the
+    // theme color manager catches up with the first foreground call.
+    getWindow()
+        .setBackgroundDrawable(
+            new GradientDrawable(
+                Orientation.TL_BR,
+                new int[] {
+                  getColor(R.color.incall_background_gradient_top),
+                  getColor(R.color.incall_background_gradient_middle),
+                  getColor(R.color.incall_background_gradient_bottom)
+                }));
+
 
     internalResolveIntent(getIntent());
 
@@ -222,7 +234,9 @@ public class InCallActivity extends TransactionSafeFragmentActivity
     getWindow()
         .getDecorView()
         .setSystemUiVisibility(
-            View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN | View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION);
+            View.SYSTEM_UI_FLAG_LAYOUT_STABLE
+                | View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
+                | View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION);
 
     pseudoBlackScreenOverlay = findViewById(R.id.psuedo_black_screen_overlay);
     sendBroadcast(CallPendingActivity.getFinishBroadcast());
@@ -424,6 +438,11 @@ public class InCallActivity extends TransactionSafeFragmentActivity
   protected void onResume() {
     Trace.beginSection("InCallActivity.onResume");
     super.onResume();
+
+    // The in-call surface draws edge-to-edge, but the status bar must stay visible. Video and
+    // immersive screens can otherwise leave it hidden after the first layout pass.
+    WindowCompat.getInsetsController(getWindow(), getWindow().getDecorView())
+        .show(androidx.core.view.WindowInsetsCompat.Type.statusBars());
 
     if (!InCallPresenter.getInstance().isReadyForTearDown()) {
       updateTaskDescription();

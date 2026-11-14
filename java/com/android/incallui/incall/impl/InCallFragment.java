@@ -175,7 +175,6 @@ public class InCallFragment extends Fragment
       @Nullable ViewGroup viewGroup,
       @Nullable Bundle bundle) {
     LogUtil.i("InCallFragment.onCreateView", null);
-    getActivity().setTheme(R.style.Theme_InCallScreen);
     // Bypass to avoid StrictModeResourceMismatchViolation
     final View view = layoutInflater.inflate(R.layout.frag_incall_voice, viewGroup, false);
     contactGridManager =

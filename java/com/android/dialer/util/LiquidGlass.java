@@ -32,8 +32,8 @@ import java.util.WeakHashMap;
 public final class LiquidGlass {
 
   private static final String SETTING = "penguin_liquid_glass";
-  private static final float BLUR_RADIUS_DP = 4f;
-  private static final float FALLBACK_BLUR_RADIUS = 2f;
+  private static final float BLUR_RADIUS_DP = 24f;
+  private static final float FALLBACK_BLUR_RADIUS = 24f;
   private static final float BEZEL_DP = 32f;
   private static final float THICKNESS_DP = 30f;
   private static final float DISPERSION = 0.08f;
