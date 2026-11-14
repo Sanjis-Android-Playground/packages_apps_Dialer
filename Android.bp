@@ -130,6 +130,7 @@ android_app {
     ],
     resource_dirs: [
         "java/com/android/dialer/expressive/res",
+        "java/com/android/dialer/icons/res",
         "assets/quantum/res",
         "java/com/android/contacts/common/res",
         "java/com/android/dialer/app/res",
@@ -236,6 +237,7 @@ android_app {
         "androidx.localbroadcastmanager_localbroadcastmanager",
         "androidx.preference_preference",
         "androidx.recyclerview_recyclerview",
+        "blurview",
         "apache-commons-compress",
         "com.google.android.material_material",
         "dagger2",
@@ -268,6 +270,11 @@ java_library {
     sdk_version: "system_current",
     srcs: ["java/**/*.proto",],
     static_libs: ["libprotobuf-java-lite"],
+}
+
+android_library_import {
+    name: "blurview",
+    aars: ["prebuilts/BlurView/BlurView-version-3.1.0.aar"],
 }
 
 java_plugin {

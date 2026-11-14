@@ -161,6 +161,18 @@ public class FloatingActionButtonController {
     fab.show();
   }
 
+  public void showImmediately() {
+    fab.animate().cancel();
+    if (fab.isOrWillBeHidden()) {
+      fab.show();
+      return;
+    }
+    fab.setScaleX(1f);
+    fab.setScaleY(1f);
+    fab.setAlpha(1f);
+    fab.setVisibility(View.VISIBLE);
+  }
+
   /** @see FloatingActionButton#hide() */
   public void scaleOut() {
     fab.hide();

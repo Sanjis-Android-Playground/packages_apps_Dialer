@@ -20,15 +20,14 @@ package com.android.dialer.app.calllog;
 import android.Manifest.permission;
 import android.animation.Animator;
 import android.animation.AnimatorListenerAdapter;
-import android.animation.AnimatorSet;
 import android.animation.ArgbEvaluator;
-import android.animation.TimeInterpolator;
 import android.animation.ValueAnimator;
 import android.annotation.SuppressLint;
 import android.app.Activity;
 import android.content.Context;
 import android.content.Intent;
 import android.content.res.Resources;
+import android.graphics.drawable.Drawable;
 import android.net.Uri;
 import android.provider.BlockedNumberContract;
 import android.provider.CallLog;
@@ -41,14 +40,11 @@ import android.telephony.TelephonyManager;
 import android.text.BidiFormatter;
 import android.text.TextDirectionHeuristics;
 import android.text.TextUtils;
-import android.transition.TransitionManager;
 import android.view.ContextMenu;
 import android.view.MenuItem;
 import android.view.View;
 import android.view.ViewGroup;
 import android.view.ViewStub;
-import android.view.animation.AccelerateDecelerateInterpolator;
-import android.view.animation.DecelerateInterpolator;
 import android.widget.ImageView;
 import android.widget.TextView;
 
@@ -58,6 +54,7 @@ import androidx.cardview.widget.CardView;
 import androidx.recyclerview.widget.RecyclerView;
 
 import com.android.contacts.common.dialog.CallSubjectDialog;
+import com.android.dialer.animation.AnimUtils;
 import com.android.dialer.R;
 import com.android.dialer.app.calllog.CallLogAdapter.OnActionModeStateChangedListener;
 import com.android.dialer.app.calllog.calllogcache.CallLogCache;
@@ -80,11 +77,14 @@ import com.android.dialer.phonenumbercache.ContactInfo;
 import com.android.dialer.phonenumbercache.PhoneNumberCache;
 import com.android.dialer.phonenumberutil.PhoneNumberHelper;
 import com.android.dialer.telecom.TelecomUtil;
+import com.android.dialer.universaldialer.AppCalls;
+import com.android.dialer.universaldialer.UniversalDialer;
 import com.android.dialer.util.CallUtil;
 import com.android.dialer.util.DialerUtils;
 import com.android.dialer.util.UriUtils;
 
 import java.lang.ref.WeakReference;
+import java.util.List;
 
 /**
  * This is an object containing references to views contained by the call log list item. This
@@ -128,6 +128,9 @@ public final class CallLogListItemViewHolder extends RecyclerView.ViewHolder
   public boolean isLoaded;
   /** The view containing call log item actions. Null until the ViewStub is inflated. */
   public View actionsView;
+
+  private static final long ACTIONS_ANIMATION_MS = 250;
+  @Nullable private ValueAnimator actionsAnimator;
   /** The button views below are assigned only when the action section is expanded. */
   public VoicemailPlaybackLayout voicemailPlaybackView;
 
@@ -136,6 +139,7 @@ public final class CallLogListItemViewHolder extends RecyclerView.ViewHolder
   public View createNewContactButtonView;
   public View addToExistingContactButtonView;
   public View sendMessageView;
+  public View callViaAppView;
   public View blockReportView;
   public View blockView;
   public View unblockView;
@@ -145,6 +149,7 @@ public final class CallLogListItemViewHolder extends RecyclerView.ViewHolder
   public View sendVoicemailButtonView;
   public final ImageView workIconView;
   public final ImageView checkBoxView;
+  public Drawable background;
   /**
    * The row Id for the first call associated with the call log entry. Used as a key for the map
    * used to track which call log entries have the action button section expanded.
@@ -219,6 +224,8 @@ public final class CallLogListItemViewHolder extends RecyclerView.ViewHolder
   public int dayGroupHeaderVisibility;
   public CharSequence dayGroupHeaderText;
   public boolean isAttachedToWindow;
+  public boolean isFirstInDateGroup; // Added for date grouping
+  public boolean isLastInDateGroup;  // Added for date grouping
 
   public CallLogAdapter.LoadDataTaskInterface asyncTask;
   private CallDetailsEntries callDetailsEntries;
@@ -371,6 +378,8 @@ public final class CallLogListItemViewHolder extends RecyclerView.ViewHolder
 
       sendMessageView = actionsView.findViewById(R.id.send_message_action);
       sendMessageView.setOnClickListener(this);
+      callViaAppView = actionsView.findViewById(R.id.call_via_app_action);
+      callViaAppView.setOnClickListener(this);
 
       blockReportView = actionsView.findViewById(R.id.block_report_action);
       blockReportView.setOnClickListener(this);
@@ -418,6 +427,24 @@ public final class CallLogListItemViewHolder extends RecyclerView.ViewHolder
       } else {
         primaryActionButtonView.setVisibility(View.GONE);
       }
+      return;
+    }
+
+    if (accountHandle != null
+        && callIds != null
+        && callIds.length > 0
+        && UniversalDialer.isVoipAccount(accountHandle.getComponentName().flattenToString())) {
+      String component = accountHandle.getComponentName().flattenToString();
+      primaryActionButtonView.setTag(
+          UniversalDialer.isNotificationEntry(component)
+              ? IntentProvider.getAppCallBackIntentProvider(
+                  accountHandle.getComponentName().getPackageName(), number)
+              : IntentProvider.getVoipCallBackIntentProvider(callIds[0]));
+      primaryActionButtonView.setContentDescription(
+          TextUtils.expandTemplate(
+              context.getString(R.string.description_call_action), validNameOrNumber));
+      primaryActionButtonView.setImageResource(R.drawable.quantum_ic_call_vd_theme_24);
+      primaryActionButtonView.setVisibility(View.VISIBLE);
       return;
     }
 
@@ -638,6 +665,8 @@ public final class CallLogListItemViewHolder extends RecyclerView.ViewHolder
       sendMessageView.setVisibility(View.GONE);
     }
 
+    bindCallViaApp(canPlaceCallToNumber && !isBlockedOrSpam && !isVoicemailNumber);
+
     callLogListItemHelper.setActionContentDescriptions(this);
 
     boolean supportsCallSubject = callLogCache.doesAccountSupportCallSubject(accountHandle);
@@ -697,6 +726,10 @@ public final class CallLogListItemViewHolder extends RecyclerView.ViewHolder
    * <p>If the action views have never been shown yet for this view, inflate the view stub.
    */
   public void showActions(boolean show) {
+    showActions(show, true);
+  }
+
+  public void showActions(boolean show, boolean animate) {
     if (show) {
       if (!isLoaded) {
         // a bug for some unidentified reason showActions() can be called before the item is
@@ -708,87 +741,108 @@ public final class CallLogListItemViewHolder extends RecyclerView.ViewHolder
             new Exception());
         return;
       }
-
-      TransitionManager.beginDelayedTransition((ViewGroup) rootView);
       // Inflate the view stub if necessary, and wire up the event handlers.
       inflateActionViewStub();
       bindActionButtons();
-      animateActions(true);
-      TransitionManager.endTransitions((ViewGroup) rootView);
-    } else {
-      TransitionManager.beginDelayedTransition((ViewGroup) rootView);
+      setActionsExpanded(true, animate);
+    } else if (actionsView != null) {
       // When recycling a view, it is possible the actionsView ViewStub was previously
       // inflated so we should hide it in this case.
-      if (actionsView != null) {
-        animateActions(false);
-      }
-      TransitionManager.endTransitions((ViewGroup) rootView);
+      setActionsExpanded(false, animate);
     }
     updatePrimaryActionButton(show);
   }
 
-  private void animateActions(boolean shouldExpand) {
+  private void setActionsExpanded(boolean expand, boolean animate) {
+    if (actionsAnimator != null) {
+      actionsAnimator.cancel();
+      actionsAnimator = null;
+    }
+    ViewGroup.LayoutParams params = callLogEntryView.getLayoutParams();
     boolean isExpanded = actionsView.getVisibility() == View.VISIBLE;
-    if (shouldExpand == isExpanded) {
+    if (!animate || !callLogEntryView.isLaidOut() || expand == isExpanded) {
+      actionsView.setVisibility(expand ? View.VISIBLE : View.GONE);
+      actionsView.setAlpha(1f);
+      params.height = ViewGroup.LayoutParams.WRAP_CONTENT;
+      callLogEntryView.setLayoutParams(params);
       return;
     }
-    Resources res = context.getResources();
-    actionsView.measure(View.MeasureSpec.UNSPECIFIED, View.MeasureSpec.UNSPECIFIED);
-    int currentHeight = callLogEntryView.getMeasuredHeight();
-    int additionalHeight = actionsView.getMeasuredHeight();
 
-    int targetHeight;
-    int colorFrom, colorTo;
-    TimeInterpolator interpolator;
-    int targetVisibility;
-    float targetElevation;
-    if (shouldExpand) {
-      targetHeight = currentHeight + additionalHeight;
-      colorFrom = res.getColor(android.R.color.transparent, context.getTheme());
-      colorTo  = res.getColor(R.color.cardBackgroundColor, context.getTheme());
-      interpolator = new AccelerateDecelerateInterpolator();
-      targetVisibility = View.VISIBLE;
-      targetElevation = 4f;
-    } else {
-      targetHeight = currentHeight - additionalHeight;
-      colorFrom  = res.getColor(R.color.cardBackgroundColor, context.getTheme());
-      colorTo = res.getColor(android.R.color.transparent, context.getTheme());
-      interpolator = new DecelerateInterpolator();
-      targetVisibility = View.GONE;
-      targetElevation = 0f;
-      // need to do this before animating, otherwise the color changes are weird
-      callLogEntryView.setCardElevation(targetElevation);
-    }
+    int startHeight = callLogEntryView.getHeight();
+    actionsView.setVisibility(View.VISIBLE);
+    int widthSpec =
+        View.MeasureSpec.makeMeasureSpec(callLogEntryView.getWidth(), View.MeasureSpec.EXACTLY);
+    int heightSpec = View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED);
+    actionsView.measure(widthSpec, heightSpec);
+    int actionsHeight = actionsView.getMeasuredHeight();
+    int endHeight = expand ? startHeight + actionsHeight : startHeight - actionsHeight;
+    View content = ((ViewGroup) callLogEntryView).getChildAt(0);
+    ViewGroup.LayoutParams contentParams = content.getLayoutParams();
+    contentParams.height = Math.max(startHeight, endHeight);
+    content.setLayoutParams(contentParams);
+    float startAlpha = expand ? 0f : 1f;
+    float endAlpha = expand ? 1f : 0f;
 
-    ValueAnimator heightAnimator = ValueAnimator.ofInt(currentHeight, targetHeight);
-    heightAnimator.addUpdateListener(animation -> {
-      callLogEntryView.getLayoutParams().height = (int) animation.getAnimatedValue();
-      callLogEntryView.requestLayout();
+    ValueAnimator animator = ValueAnimator.ofFloat(0f, 1f);
+    animator.setDuration(ACTIONS_ANIMATION_MS);
+    animator.setInterpolator(AnimUtils.EASE_OUT_EASE_IN);
+    animator.addUpdateListener(animation -> {
+      float t = (float) animation.getAnimatedValue();
+      params.height = Math.round(startHeight + (endHeight - startHeight) * t);
+      actionsView.setAlpha(startAlpha + (endAlpha - startAlpha) * t);
+      callLogEntryView.setLayoutParams(params);
     });
-    heightAnimator.setInterpolator(interpolator);
-    heightAnimator.setDuration(200);
-
-    ValueAnimator colorAnimator = ValueAnimator.ofObject(new ArgbEvaluator(), colorFrom, colorTo);
-    colorAnimator.setDuration(200);
-    colorAnimator.addUpdateListener(animator -> callLogEntryView.setCardBackgroundColor(
-            (int) animator.getAnimatedValue()));
-
-    AnimatorSet animatorSet = new AnimatorSet();
-    animatorSet.playTogether(heightAnimator, colorAnimator);
-    animatorSet.addListener(new AnimatorListenerAdapter() {
+    animator.addListener(new AnimatorListenerAdapter() {
       @Override
       public void onAnimationEnd(Animator animation) {
-        super.onAnimationEnd(animation);
-        actionsView.setVisibility(targetVisibility);
-        callLogEntryView.setCardElevation(targetElevation);
-
-        // we need to set this so we can expand again
-        ViewGroup.LayoutParams params = callLogEntryView.getLayoutParams();
+        actionsView.setVisibility(expand ? View.VISIBLE : View.GONE);
+        actionsView.setAlpha(1f);
+        contentParams.height = ViewGroup.LayoutParams.WRAP_CONTENT;
+        content.setLayoutParams(contentParams);
         params.height = ViewGroup.LayoutParams.WRAP_CONTENT;
         callLogEntryView.setLayoutParams(params);
       }
     });
-    animatorSet.start();
+    actionsAnimator = animator;
+    animator.start();
+  }
+
+  private void bindCallViaApp(boolean allowed) {
+    callViaAppView.setVisibility(View.GONE);
+    if (!allowed || !UniversalDialer.isEnabled(context) || TextUtils.isEmpty(number)) {
+      return;
+    }
+    final String boundNumber = number;
+    final Context appContext = context.getApplicationContext();
+    new Thread(() -> {
+      List<AppCalls.Option> options = AppCalls.forNumber(appContext, boundNumber);
+      AppCalls.Option voice = null;
+      for (AppCalls.Option option : options) {
+        if (!option.video) {
+          voice = option;
+          break;
+        }
+      }
+      final AppCalls.Option chosen = voice;
+      callViaAppView.post(() -> {
+        if (chosen == null || !boundNumber.equals(number)) {
+          return;
+        }
+        CharSequence app =
+            UniversalDialer.appLabel(
+                context, UniversalDialer.notificationAccountComponent(chosen.appPackage));
+        ((TextView) callViaAppView.findViewById(R.id.call_via_app_text))
+            .setText(context.getString(R.string.call_log_action_call_via_app, app));
+        callViaAppView.setTag(
+            new IntentProvider() {
+              @Override
+              public Intent getClickIntent(Context context) {
+                return chosen.intent();
+              }
+            });
+        callViaAppView.setVisibility(View.VISIBLE);
+      });
+    }, "CallLogListItemViewHolder.callViaApp").start();
   }
 
   public void updatePhoto() {
@@ -868,6 +922,29 @@ public final class CallLogListItemViewHolder extends RecyclerView.ViewHolder
 
     if (view.getId() == R.id.share_voicemail) {
       voicemailPlaybackPresenter.shareVoicemail();
+      return;
+    }
+
+    if (view.getId() == R.id.details_action) {
+      CallLogAsyncTaskUtil.getCallDetails(
+          context,
+          number,
+          (entries) -> {
+            if (entries != null) {
+              boolean canReportCallerId =
+                  cachedNumberLookupService != null
+                      && cachedNumberLookupService.canReportAsInvalid(
+                          info.sourceType, info.objectId);
+              final Intent intent =
+                  IntentProvider.getCallDetailIntentProvider(
+                          entries,
+                          buildContact(),
+                          canReportCallerId,
+                          canSupportAssistedDialing())
+                      .getClickIntent(context);
+              DialerUtils.startActivityWithErrorToast(context, intent);
+            }
+          });
       return;
     }
 

@@ -18,6 +18,7 @@
 package com.android.dialer.app.calllog;
 
 import android.app.Activity;
+import android.content.ComponentName;
 import android.content.ContentUris;
 import android.content.res.Resources;
 import android.database.Cursor;
@@ -27,6 +28,7 @@ import android.os.Handler;
 import android.os.Looper;
 import android.os.Trace;
 import android.provider.BlockedNumberContract;
+import android.provider.CallLog.Calls;
 import android.provider.CallLog;
 import android.provider.ContactsContract.CommonDataKinds.Phone;
 import android.telecom.PhoneAccountHandle;
@@ -75,9 +77,16 @@ import com.android.dialer.phonenumbercache.CallLogQuery;
 import com.android.dialer.phonenumbercache.ContactInfo;
 import com.android.dialer.phonenumbercache.ContactInfoHelper;
 import com.android.dialer.phonenumberutil.PhoneNumberHelper;
-import com.android.dialer.spam.CarrierCallIdentityStore;
 import com.android.dialer.telecom.TelecomUtil;
+import android.content.Intent;
+import com.android.dialer.universaldialer.AppCalls;
+import com.android.dialer.universaldialer.UniversalDialer;
+import com.android.dialer.util.DialerUtils;
 import com.android.dialer.util.PermissionsUtil;
+import com.android.dialer.widget.HigAlertDialogs;
+import com.android.dialer.widget.SwipeAndDragHelper;
+import androidx.recyclerview.widget.ItemTouchHelper;
+import com.android.dialer.util.CallUtil;
 
 import java.util.ArrayList;
 import java.util.Map;
@@ -87,7 +96,7 @@ import java.util.concurrent.Executors;
 
 /** Adapter class to fill in data for the Call Log. */
 public class CallLogAdapter extends GroupingListAdapter
-    implements GroupCreator, OnVoicemailDeletedListener {
+    implements GroupCreator, OnVoicemailDeletedListener, SwipeAndDragHelper.ActionCompletionContract {
 
   // Types of activities the call log adapter is used for
   public static final int ACTIVITY_TYPE_CALL_LOG = 1;
@@ -97,6 +106,11 @@ public class CallLogAdapter extends GroupingListAdapter
   private static final int VIEW_TYPE_ALERT = 1;
   private static final int VIEW_TYPE_CALLLOG = 2;
 
+  public boolean isCallLogRow(int position) {
+    return position >= 0 && position < getItemCount()
+        && getItemViewType(position) == VIEW_TYPE_CALLLOG;
+  }
+
   private static final String KEY_EXPANDED_POSITION = "expanded_position";
   private static final String KEY_EXPANDED_ROW_ID = "expanded_row_id";
   private static final String KEY_ACTION_MODE = "action_mode_selected_items";
@@ -104,6 +118,7 @@ public class CallLogAdapter extends GroupingListAdapter
   public static final String LOAD_DATA_TASK_IDENTIFIER = "load_data";
 
   protected final Activity activity;
+  private final Handler swipeRestoreHandler = new Handler(Looper.getMainLooper());
   protected final VoicemailPlaybackPresenter voicemailPlaybackPresenter;
   /** Cache for repeated requests to Telecom/Telephony. */
   protected final CallLogCache callLogCache;
@@ -637,6 +652,28 @@ public class CallLogAdapter extends GroupingListAdapter
         break;
     }
     Trace.endSection();
+
+    if (viewHolder instanceof CallLogListItemViewHolder) {
+        CallLogListItemViewHolder vh = (CallLogListItemViewHolder) viewHolder;
+
+        boolean isFirstInGroup = position == 0;
+        boolean isLastInGroup = position == getItemCount() - 1;
+
+        vh.isFirstInDateGroup = isFirstInGroup;
+        vh.isLastInDateGroup = isLastInGroup;
+
+        int drawableId;
+        if (isFirstInGroup && isLastInGroup) {
+            drawableId = R.drawable.call_log_card_background_single;
+        } else if (isFirstInGroup) {
+            drawableId = R.drawable.call_log_card_background_top;
+        } else if (isLastInGroup) {
+            drawableId = R.drawable.call_log_card_background_bottom;
+        } else {
+            drawableId = R.drawable.call_log_card_background_middle;
+        }
+        vh.callLogEntryView.setBackgroundResource(drawableId);
+    }
   }
 
   @Override
@@ -689,7 +726,6 @@ public class CallLogAdapter extends GroupingListAdapter
       return;
     } else {
       views.callLogEntryView.setVisibility(View.VISIBLE);
-      // dayGroupHeader will be restored after loadAndRender() if it is needed.
     }
     if (currentlyExpandedRowId == views.rowId) {
       views.inflateActionViewStub();
@@ -885,10 +921,6 @@ public class CallLogAdapter extends GroupingListAdapter
     final PhoneAccountHandle accountHandle =
         TelecomUtil.composePhoneAccountHandle(details.accountComponentName, details.accountId);
 
-    details.isSpam =
-        CarrierCallIdentityStore.get(activity, details.number.toString(), accountHandle).isSpam();
-    views.isSpam = details.isSpam;
-
     final boolean isVoicemailNumber = callLogCache.isVoicemailNumber(accountHandle, details.number);
 
     // Note: Binding of the action buttons is done as required in configureActionViews when the
@@ -1000,11 +1032,11 @@ public class CallLogAdapter extends GroupingListAdapter
       // In case ViewHolders were added/removed, update the expanded position if the rowIds
       // match so that we can restore the correct expanded state on rebind.
       currentlyExpandedPosition = views.getAdapterPosition();
-      views.showActions(true);
+      views.showActions(true, false);
     } else {
-      views.showActions(false);
+      views.showActions(false, false);
     }
-    views.dayGroupHeader.setVisibility(views.dayGroupHeaderVisibility);
+    views.dayGroupHeader.setVisibility(View.GONE);
     views.dayGroupHeader.setText(views.dayGroupHeaderText);
   }
 
@@ -1300,5 +1332,78 @@ public class CallLogAdapter extends GroupingListAdapter
     void setSelectAllModeToFalse();
 
     void tapSelectAll();
+  }
+
+  @Override
+  public void onViewSwiped(int position, int direction) {
+    Cursor cursor = (Cursor) getItem(position);
+    if (cursor == null) {
+      restoreSwipedItem(position);
+      return;
+    }
+
+    boolean isDelete = direction == ItemTouchHelper.LEFT;
+    String number = cursor.getString(CallLogQuery.NUMBER);
+    String contactLabel = getSwipeContactLabel(cursor, number);
+    long[] callIds = isDelete ? getCallIds(cursor, getGroupSize(position)) : null;
+    String accountComponent = cursor.getString(CallLogQuery.ACCOUNT_COMPONENT_NAME);
+    long callId = cursor.getLong(CallLogQuery.ID);
+
+    AlertDialog.Builder builder = new AlertDialog.Builder(activity)
+        .setTitle(
+            activity.getString(
+                isDelete
+                    ? R.string.call_log_swipe_delete_confirmation
+                    : R.string.call_log_swipe_call_confirmation,
+                contactLabel))
+        .setPositiveButton(
+            isDelete ? R.string.call_log_swipe_delete : R.string.call_log_swipe_call,
+            (dialog, which) -> {
+              if (isDelete) {
+                CallLogAsyncTaskUtil.deleteCalls(activity, callIds, null);
+              } else if (UniversalDialer.isNotificationEntry(accountComponent)) {
+                Intent intent =
+                    AppCalls.callBackIntent(
+                        activity,
+                        ComponentName.unflattenFromString(accountComponent).getPackageName(),
+                        number);
+                if (intent != null) {
+                  DialerUtils.startActivityWithErrorToast(activity, intent);
+                }
+              } else if (UniversalDialer.isVoipAccount(accountComponent)) {
+                activity.startActivity(
+                    new Intent(
+                        Intent.ACTION_CALL, ContentUris.withAppendedId(Calls.CONTENT_URI, callId)));
+              } else {
+                activity.startActivity(new Intent(Intent.ACTION_CALL, CallUtil.getCallUri(number)));
+              }
+            })
+        .setNegativeButton(android.R.string.cancel, null)
+        .setOnDismissListener(dialog -> restoreSwipedItem(position));
+    HigAlertDialogs.showConfirmation(builder, isDelete);
+  }
+
+  private String getSwipeContactLabel(Cursor cursor, String number) {
+    String name = cursor.getString(CallLogQuery.CACHED_NAME);
+    if (!TextUtils.isEmpty(name)) {
+      return name;
+    }
+    if (!TextUtils.isEmpty(number)) {
+      return number;
+    }
+    return activity.getString(R.string.call_log_swipe_unknown_contact);
+  }
+
+  private void restoreSwipedItem(int position) {
+    swipeRestoreHandler.post(
+        () -> {
+          if (position >= 0 && position < getItemCount()) {
+            notifyItemChanged(position);
+          }
+        });
+  }
+
+  @Override
+  public void onRestoreInstanceState(ViewHolder viewHolder) {
   }
 }

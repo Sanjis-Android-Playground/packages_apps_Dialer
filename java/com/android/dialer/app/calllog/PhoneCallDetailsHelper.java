@@ -28,6 +28,8 @@ import android.text.TextUtils;
 import android.text.format.DateUtils;
 import android.view.View;
 
+import androidx.annotation.Nullable;
+
 import com.android.dialer.R;
 import com.android.dialer.app.calllog.calllogcache.CallLogCache;
 import com.android.dialer.calllogutils.PhoneCallDetails;
@@ -38,10 +40,12 @@ import com.android.dialer.phonenumbercache.CachedNumberLookupService;
 import com.android.dialer.phonenumbercache.PhoneNumberCache;
 import com.android.dialer.phonenumberutil.PhoneNumberHelper;
 import com.android.dialer.theme.base.ThemeComponent;
+import com.android.dialer.universaldialer.UniversalDialer;
 import com.android.dialer.util.DialerUtils;
 
 import java.util.ArrayList;
 import java.util.Calendar;
+import java.util.Locale;
 import java.util.concurrent.TimeUnit;
 
 /** Helper class to fill in the views in {@link PhoneCallDetailsViews}. */
@@ -162,10 +166,14 @@ public class PhoneCallDetailsHelper {
 
     setNameView(views, details);
 
-    // Bold if not read
-    Typeface typeface = details.isRead ? Typeface.DEFAULT : Typeface.DEFAULT_BOLD;
-    views.nameView.setTypeface(typeface);
-    views.callLocationAndDate.setTypeface(typeface);
+    boolean isMissed = count > 0 && details.callTypes[0] == Calls.MISSED_TYPE;
+    views.nameView.setTextColor(
+        isMissed
+            ? context.getColor(R.color.dialer_system_red)
+            : ThemeComponent.get(context).theme().getTextColorPrimary());
+
+    views.nameView.setTypeface(
+        Typeface.create(Typeface.SANS_SERIF, details.isRead ? 600 : 700, false));
     views.callLocationAndDate.setTextColor(
         details.isRead
             ? ThemeComponent.get(context).theme().getTextColorSecondary()
@@ -335,6 +343,24 @@ public class PhoneCallDetailsHelper {
   /** Sets the call count, date, and if it is a voicemail, sets the duration. */
   private void setDetailText(
       PhoneCallDetailsViews views, Integer callCount, PhoneCallDetails details) {
+    if (views.callTime == null) {
+      setCombinedDetailText(views, callCount, details);
+      return;
+    }
+    CharSequence label = getListLabel(details);
+    CharSequence subtitle = label == null ? "" : label;
+    if (callCount != null) {
+      subtitle = resources.getString(R.string.call_log_item_label_and_count, subtitle, callCount);
+    }
+    views.callLocationAndDate.setText(subtitle);
+    views.callTime.setText(
+        details.callTypes[0] == Calls.VOICEMAIL_TYPE
+            ? getGranularDateTime(details)
+            : getListTime(details.date));
+  }
+
+  private void setCombinedDetailText(
+      PhoneCallDetailsViews views, Integer callCount, PhoneCallDetails details) {
     // Combine the count (if present) and the date.
     CharSequence dateText = details.callLocationAndDate;
     final CharSequence text;
@@ -353,6 +379,64 @@ public class PhoneCallDetailsHelper {
     } else {
       views.callLocationAndDate.setText(text);
     }
+  }
+
+  @Nullable
+  private CharSequence getListLabel(PhoneCallDetails details) {
+    if (details.accountHandle != null
+        && UniversalDialer.isVoipAccount(details.accountHandle.getComponentName().flattenToString())) {
+      CharSequence app = UniversalDialer.accountLabel(context, details.accountHandle);
+      if (app != null) {
+        boolean video = (details.features & Calls.FEATURES_VIDEO) == Calls.FEATURES_VIDEO;
+        return resources.getString(
+            video
+                ? R.string.universal_dialer_call_label_video
+                : R.string.universal_dialer_call_label_audio,
+            app);
+      }
+    }
+    CharSequence label = getCallTypeOrLocation(details);
+    if (label != null
+        && !details.isSpam
+        && !details.isBlocked
+        && !shouldShowLocation(details)
+        && TextUtils.equals(
+            label, Phone.getTypeLabel(resources, details.numberType, details.numberLabel))
+        && details.numberType != Phone.TYPE_CUSTOM) {
+      return label.toString().toLowerCase(Locale.getDefault());
+    }
+    return label;
+  }
+
+  private CharSequence getListTime(long date) {
+    long now = getCurrentTimeMillis();
+    Calendar call = Calendar.getInstance();
+    call.setTimeInMillis(date);
+    Calendar today = Calendar.getInstance();
+    today.setTimeInMillis(now);
+    int days = daysBetween(call, today);
+    if (days <= 0) {
+      return DateUtils.formatDateTime(context, date, DateUtils.FORMAT_SHOW_TIME);
+    } else if (days == 1) {
+      return DateUtils.getRelativeTimeSpanString(date, now, DateUtils.DAY_IN_MILLIS);
+    } else if (days < 7) {
+      return DateUtils.formatDateTime(context, date, DateUtils.FORMAT_SHOW_WEEKDAY);
+    }
+    return DateUtils.formatDateTime(
+        context, date, DateUtils.FORMAT_SHOW_DATE | DateUtils.FORMAT_NUMERIC_DATE
+            | DateUtils.FORMAT_SHOW_YEAR);
+  }
+
+  private static int daysBetween(Calendar from, Calendar to) {
+    Calendar a = (Calendar) from.clone();
+    Calendar b = (Calendar) to.clone();
+    for (Calendar c : new Calendar[] {a, b}) {
+      c.set(Calendar.HOUR_OF_DAY, 0);
+      c.set(Calendar.MINUTE, 0);
+      c.set(Calendar.SECOND, 0);
+      c.set(Calendar.MILLISECOND, 0);
+    }
+    return (int) TimeUnit.MILLISECONDS.toDays(b.getTimeInMillis() - a.getTimeInMillis());
   }
 
   private String getVoicemailDuration(PhoneCallDetails details) {

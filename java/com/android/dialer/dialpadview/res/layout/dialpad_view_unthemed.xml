@@ -27,7 +27,8 @@
     android:clickable="true"
     android:elevation="?attr/dialpad_elevation"
     android:layoutDirection="ltr"
-    android:orientation="vertical">
+    android:orientation="vertical"
+    android:visibility="gone">
 
   <!-- Text field where call rate is displayed for ILD calls. -->
   <LinearLayout
@@ -69,7 +70,7 @@
 
   <!-- Text field and possibly soft menu button above the keypad where
    the digits are displayed. -->
-  <LinearLayout
+  <RelativeLayout
       android:id="@+id/digits_container"
       android:layout_width="match_parent"
       android:layout_height="?attr/dialpad_digits_adjustable_height"
@@ -104,12 +105,14 @@
         android:src="@drawable/quantum_ic_more_vert_vd_theme_24"
         android:tintMode="src_in"
         android:visibility="gone"
+        android:layout_alignParentStart="true"
         app:tint="@color/dialer_theme_color_light"
         tools:visibility="visible"/>
 
-      <FrameLayout android:layout_width="0dp"
+      <FrameLayout
           android:layout_height="match_parent"
-          android:layout_weight="1">
+          android:layout_width="match_parent">
+
         <TextView android:layout_width="match_parent"
             android:layout_height="match_parent"
             android:id="@+id/digits_hint"
@@ -117,8 +120,7 @@
             android:gravity="center"
             android:textSize="14sp"
             android:textColor="?colorIcon"
-            android:visibility="gone"
-          />
+            android:visibility="gone"/>
         <com.android.dialer.dialpadview.DigitsEditText
             xmlns:ex="http://schemas.android.com/apk/res-auto"
             android:id="@+id/digits"
@@ -126,6 +128,8 @@
             android:layout_width="match_parent"
             android:layout_height="match_parent"
             android:background="@android:color/transparent"
+            android:layout_marginStart="86dp"
+            android:layout_marginEnd="86dp"
             android:cursorVisible="false"
             android:focusableInTouchMode="true"
             android:fontFamily="@*android:string/config_bodyFontFamily"
@@ -139,7 +143,7 @@
             android:textCursorDrawable="@null"
             android:textSize="?attr/dialpad_digits_adjustable_text_size"
             ex:resizing_text_min_size="@dimen/dialpad_digits_text_min_size"/>
-      </FrameLayout>
+</FrameLayout>
     <ImageButton
         android:id="@+id/deleteButton"
         android:layout_width="wrap_content"
@@ -149,11 +153,12 @@
         android:layout_margin="@dimen/dialpad_overflow_margin"
         android:background="@drawable/btn_dialpad_key"
         android:contentDescription="@string/description_delete_button"
-        android:src="@drawable/quantum_ic_backspace_vd_theme_24"
-        android:state_enabled="false"
+        android:src="@drawable/ic_dialpad_delete"
+        android:visibility="visible"
+        android:layout_alignParentEnd="true"
         android:tintMode="src_in"
-        app:tint="@color/dialer_theme_color_light" />
-  </LinearLayout>
+        app:tint="?attr/dialpad_text_color_secondary" />
+  </RelativeLayout>
 
   <View
       android:layout_width="match_parent"

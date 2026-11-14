@@ -42,7 +42,7 @@ import com.android.dialer.util.DialerUtils;
 import java.util.Optional;
 
 /** Search bar for {@link MainToolbar}. Mostly used to handle expand and collapse animation. */
-final class SearchBarView extends FrameLayout {
+public final class SearchBarView extends FrameLayout {
 
   private static final int ANIMATION_DURATION = 200;
   private static final float EXPAND_MARGIN_FRACTION_START = 0.8f;
@@ -115,7 +115,18 @@ final class SearchBarView extends FrameLayout {
    *
    * @param requestFocus should be false if showing the dialpad
    */
-  /* package-private */ void expand(boolean animate, Optional<String> text, boolean requestFocus) {
+  @Nullable private ValueAnimator stateAnimator;
+
+  private void replaceStateAnimator(ValueAnimator next) {
+    if (stateAnimator != null) {
+      stateAnimator.removeAllListeners();
+      stateAnimator.removeAllUpdateListeners();
+      stateAnimator.cancel();
+    }
+    stateAnimator = next;
+  }
+
+  public void expand(boolean animate, Optional<String> text, boolean requestFocus) {
     if (isExpanded) {
       return;
     }
@@ -124,6 +135,7 @@ final class SearchBarView extends FrameLayout {
     searchBoxExpanded.setVisibility(VISIBLE);
     AnimUtils.crossFadeViews(searchBoxExpanded, searchBoxCollapsed, duration);
     ValueAnimator animator = ValueAnimator.ofFloat(EXPAND_MARGIN_FRACTION_START, 0f);
+    replaceStateAnimator(animator);
     animator.addUpdateListener(animation -> setMargins((Float) animation.getAnimatedValue()));
     animator.setDuration(duration);
     animator.addListener(
@@ -143,8 +155,8 @@ final class SearchBarView extends FrameLayout {
             // physical/bluetooth keyboards will type into this box when the dialpad is open.
             if (requestFocus) {
               searchBox.requestFocus();
+              DialerUtils.showInputMethod(searchBox);
             }
-            setBackgroundResource(R.drawable.search_bar_background);
           }
         });
     animator.start();
@@ -159,6 +171,7 @@ final class SearchBarView extends FrameLayout {
     int duration = animate ? ANIMATION_DURATION : 0;
     AnimUtils.crossFadeViews(searchBoxCollapsed, searchBoxExpanded, duration);
     ValueAnimator animator = ValueAnimator.ofFloat(0f, EXPAND_MARGIN_FRACTION_START);
+    replaceStateAnimator(animator);
     animator.addUpdateListener(animation -> setMargins((Float) animation.getAnimatedValue()));
     animator.setDuration(duration);
 
@@ -176,7 +189,6 @@ final class SearchBarView extends FrameLayout {
             super.onAnimationEnd(animation);
             searchBox.setText("");
             searchBoxExpanded.setVisibility(INVISIBLE);
-            setBackgroundResource(R.drawable.search_bar_background_rounded_corners);
           }
         });
     animator.start();
@@ -221,6 +233,7 @@ final class SearchBarView extends FrameLayout {
   }
 
   public void showKeyboard() {
+    searchBox.requestFocus();
     UiUtil.forceOpenKeyboardFrom(getContext(), searchBox);
   }
 

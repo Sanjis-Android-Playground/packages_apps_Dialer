@@ -18,9 +18,15 @@
 package com.android.dialer.main.impl.bottomnav;
 
 import android.content.Context;
+import android.content.res.ColorStateList;
+import android.graphics.RenderEffect;
+import android.graphics.Shader;
+import android.os.Build;
 import android.util.AttributeSet;
 import android.view.View;
-import android.widget.LinearLayout;
+import android.widget.FrameLayout;
+import android.widget.ImageView;
+import android.widget.TextView;
 
 import androidx.annotation.IntDef;
 import androidx.annotation.Nullable;
@@ -35,8 +41,19 @@ import java.lang.annotation.RetentionPolicy;
 import java.util.ArrayList;
 import java.util.List;
 
+import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Method;
+
+import android.graphics.Bitmap;
+import android.graphics.Canvas;
+import android.graphics.drawable.BitmapDrawable;
+import android.view.View;
+import android.view.ViewGroup;
+import android.graphics.Shader;
+import android.graphics.RenderEffect;
+
 /** Dialer Bottom Nav Bar for {@link MainActivity}. */
-public final class BottomNavBar extends LinearLayout {
+public final class BottomNavBar extends FrameLayout {
 
   /** Index for each tab in the bottom nav. */
   @Retention(RetentionPolicy.SOURCE)
@@ -63,6 +80,13 @@ public final class BottomNavBar extends LinearLayout {
   private BottomNavItem voicemail;
   private @TabIndex int selectedTab;
 
+  private View keypadTab;
+  private View keypadContent;
+  private ImageView keypadIcon;
+  private TextView keypadLabel;
+  private boolean keypadActive;
+  @Nullable private Runnable onLeaveKeypad;
+
   public BottomNavBar(Context context, @Nullable AttributeSet attrs) {
     super(context, attrs);
   }
@@ -77,20 +101,78 @@ public final class BottomNavBar extends LinearLayout {
 
     speedDial.setup(R.string.tab_title_speed_dial, R.drawable.quantum_ic_star_outline_vd_theme_24,
             R.drawable.quantum_ic_star_vd_theme_24);
-    callLog.setup(R.string.tab_title_call_history, R.drawable.quantum_ic_access_time_vd_theme_24,
-            R.drawable.quantum_ic_clock_filled_vd_theme_24);
-    contacts.setup(R.string.tab_all_contacts, R.drawable.quantum_ic_people_outline_vd_theme_24,
+    callLog.setup(R.string.dialer_title, R.drawable.quantum_ic_access_time_vd_theme_24,
+            R.drawable.quantum_ic_access_time_vd_theme_24);
+    contacts.setup(R.string.contacts_title, R.drawable.quantum_ic_people_vd_theme_24,
             R.drawable.quantum_ic_people_vd_theme_24);
     voicemail.setup(R.string.tab_title_voicemail, R.drawable.quantum_ic_voicemail_vd_theme_24,
             R.drawable.quantum_ic_voicemail_vd_theme_24);
 
-    speedDial.setOnClickListener(v -> selectTab(TabIndex.SPEED_DIAL));
-    callLog.setOnClickListener(v -> selectTab(TabIndex.CALL_LOG));
-    contacts.setOnClickListener(v -> selectTab(TabIndex.CONTACTS));
-    voicemail.setOnClickListener(v -> selectTab(TabIndex.VOICEMAIL));
+
+
+    speedDial.setOnClickListener(v -> onTabClicked(TabIndex.SPEED_DIAL));
+    callLog.setOnClickListener(v -> onTabClicked(TabIndex.CALL_LOG));
+    contacts.setOnClickListener(v -> onTabClicked(TabIndex.CONTACTS));
+    voicemail.setOnClickListener(v -> onTabClicked(TabIndex.VOICEMAIL));
+
+    keypadTab = findViewById(R.id.keypad_tab);
+    keypadContent = findViewById(R.id.keypad_tab_content);
+    keypadIcon = findViewById(R.id.fab);
+    keypadLabel = findViewById(R.id.fab_label);
   }
 
+  private void onTabClicked(@TabIndex int tab) {
+    if (keypadActive && onLeaveKeypad != null) {
+      onLeaveKeypad.run();
+    }
+    selectTab(tab);
+  }
+
+  public void setOnLeaveKeypadListener(@Nullable Runnable listener) {
+    onLeaveKeypad = listener;
+  }
+
+  public void setKeypadActive(boolean active) {
+    if (keypadActive == active) {
+      return;
+    }
+    keypadActive = active;
+    if (active) {
+      setSelected(keypadTab);
+    } else {
+      setSelected(viewForTab(selectedTab));
+    }
+    int color = getContext().getColor(
+        active ? R.color.dialer_label_primary : R.color.dialer_label_secondary);
+    keypadContent.setBackgroundResource(active ? R.drawable.bottom_nav_selected_capsule : 0);
+    keypadIcon.setImageTintList(ColorStateList.valueOf(color));
+    keypadLabel.setTextColor(color);
+  }
+
+  @Nullable
+  private View viewForTab(@TabIndex int tab) {
+    switch (tab) {
+      case TabIndex.SPEED_DIAL:
+        return speedDial;
+      case TabIndex.CALL_LOG:
+        return callLog;
+      case TabIndex.CONTACTS:
+        return contacts;
+      case TabIndex.VOICEMAIL:
+        return voicemail;
+      default:
+        return null;
+    }
+  }
+
+
+
+
+
   private void setSelected(View view) {
+    if (keypadActive && view != keypadTab) {
+      return;
+    }
     speedDial.setSelected(view == speedDial);
     callLog.setSelected(view == callLog);
     contacts.setSelected(view == contacts);
@@ -133,16 +215,31 @@ public final class BottomNavBar extends LinearLayout {
   public void showVoicemail(boolean showTab) {
     LogUtil.i("OldMainActivityPeer.showVoicemail", "showing Tab:%b", showTab);
     int voicemailpreviousVisibility = voicemail.getVisibility();
-    voicemail.setVisibility(showTab ? View.VISIBLE : View.GONE);
+    voicemail.setVisibility(View.GONE);
     int voicemailcurrentVisibility = voicemail.getVisibility();
 
     if (voicemailpreviousVisibility != voicemailcurrentVisibility
         && voicemailpreviousVisibility == View.VISIBLE
         && getSelectedTab() == TabIndex.VOICEMAIL) {
       LogUtil.i("OldMainActivityPeer.showVoicemail", "hid VM tab and moved to speed dial tab");
-      selectTab(TabIndex.SPEED_DIAL);
+      selectTab(TabIndex.CALL_LOG);
     }
   }
+
+  public void showSpeedDial(boolean showTab) {
+    LogUtil.i("OldMainActivityPeer.showSpeedDial", "showing Tab:%b", showTab);
+    int speedDialPreviousVisibility = speedDial.getVisibility();
+    speedDial.setVisibility(showTab ? View.VISIBLE : View.GONE);
+    int speedDialCurrentVisibility = speedDial.getVisibility();
+
+    if (speedDialPreviousVisibility != speedDialCurrentVisibility
+        && speedDialPreviousVisibility == View.VISIBLE
+        && getSelectedTab() == TabIndex.SPEED_DIAL) {
+      LogUtil.i("OldMainActivityPeer.showSpeedDial", "hid SD tab and moved to call log tab");
+      selectTab(TabIndex.CALL_LOG);  // or any fallback tab
+    }
+}
+
 
   public void setNotificationCount(@TabIndex int tab, int count) {
     if (tab == TabIndex.SPEED_DIAL) {

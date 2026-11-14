@@ -239,4 +239,8 @@
     <string name="expressive_speed_dial_contacts_unavailable">Contacts are unavailable. Enter a number to save a shortcut.</string>
     <string name="expressive_speed_dial_use_number">Save number</string>
     <string name="expressive_speed_dial_unassigned_key">Shortcut %1$d is not set up yet. Set it up in Speed dial.</string>
+    <string name="dialer_ui_style_title">Dialer style</string>
+    <string name="dialer_ui_style_summary">Choose the Lunaris or PenguinOS dialer interface</string>
+    <string name="dialer_ui_style_lunaris">Lunaris</string>
+    <string name="dialer_ui_style_penguin">PenguinOS</string>
 </resources>

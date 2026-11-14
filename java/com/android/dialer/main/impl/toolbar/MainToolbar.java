@@ -23,9 +23,12 @@ import android.view.MenuItem;
 import android.view.View;
 import android.view.animation.AccelerateDecelerateInterpolator;
 import android.widget.ImageButton;
+import android.widget.ImageView;
 import android.widget.PopupMenu;
+import android.widget.TextView;
 
 import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
 import androidx.annotation.StringRes;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.appcompat.widget.Toolbar;
@@ -45,9 +48,13 @@ public final class MainToolbar extends Toolbar implements PopupMenu.OnMenuItemCl
       new AccelerateDecelerateInterpolator();
 
   private SearchBarView searchBar;
+  private TextView titleView;
   private SearchBarListener listener;
   private MainToolbarMenu overflowMenu;
   private boolean hasGlobalLayoutListener;
+  private boolean slidUp;
+  private ImageView searchBackground;
+  private ImageView searchMagnifyingGlass;
 
   public MainToolbar(Context context, AttributeSet attrs) {
     super(context, attrs);
@@ -64,6 +71,9 @@ public final class MainToolbar extends Toolbar implements PopupMenu.OnMenuItemCl
     optionsMenuButton.setOnTouchListener(overflowMenu.getDragToOpenListener());
 
     searchBar = findViewById(R.id.search_view_container);
+    titleView = findViewById(R.id.toolbar_title);
+    searchBackground = findViewById(R.id.search_background);
+    searchMagnifyingGlass = findViewById(R.id.search_magnifying_glass);
   }
 
   @Override
@@ -76,8 +86,12 @@ public final class MainToolbar extends Toolbar implements PopupMenu.OnMenuItemCl
     searchBar.setSearchBarListener(listener);
   }
 
+  public void setTitle(CharSequence title) {
+    titleView.setText(title);
+  }
+
   /** Slides the toolbar up and off the screen. */
-  public void slideUp(boolean animate, View container) {
+  public void slideUp(boolean animate, @Nullable View container) {
     if (hasGlobalLayoutListener) {
       // Return early since we've already scheduled the toolbar to slide up
       return;
@@ -99,36 +113,55 @@ public final class MainToolbar extends Toolbar implements PopupMenu.OnMenuItemCl
       return;
     }
 
+    slidUp = true;
     animate()
-        .translationY(-getHeight())
+        .translationY(-slideDistance())
         .setDuration(animate ? SLIDE_DURATION : 0)
         .setInterpolator(SLIDE_INTERPOLATOR)
         .start();
-    container
-        .animate()
-        .translationY(-getHeight())
-        .setDuration(animate ? SLIDE_DURATION : 0)
-        .setInterpolator(SLIDE_INTERPOLATOR)
-        .start();
+    if (container != null) {
+      container
+          .animate()
+          .translationY(-getHeight())
+          .setDuration(animate ? SLIDE_DURATION : 0)
+          .setInterpolator(SLIDE_INTERPOLATOR)
+          .start();
+    }
+  }
+
+  private int slideDistance() {
+    return getBottom();
+  }
+
+  @Override
+  protected void onLayout(boolean changed, int l, int t, int r, int b) {
+    super.onLayout(changed, l, t, r, b);
+    if (slidUp && getTranslationY() != -slideDistance()) {
+      animate().cancel();
+      setTranslationY(-slideDistance());
+    }
   }
 
   /** Slides the toolbar down and back onto the screen. */
-  public void slideDown(boolean animate, View container) {
+  public void slideDown(boolean animate, @Nullable View container) {
     if (getTranslationY() == 0) {
       LogUtil.e("MainToolbar.slideDown", "Already slide down.");
       return;
     }
+    slidUp = false;
     animate()
         .translationY(0)
         .setDuration(animate ? SLIDE_DURATION : 0)
         .setInterpolator(SLIDE_INTERPOLATOR)
         .start();
-    container
-        .animate()
-        .translationY(0)
-        .setDuration(animate ? SLIDE_DURATION : 0)
-        .setInterpolator(SLIDE_INTERPOLATOR)
-        .start();
+    if (container != null) {
+      container
+          .animate()
+          .translationY(0)
+          .setDuration(animate ? SLIDE_DURATION : 0)
+          .setInterpolator(SLIDE_INTERPOLATOR)
+          .start();
+    }
   }
 
   /** @see SearchBarView#collapse(boolean) */
@@ -142,7 +175,7 @@ public final class MainToolbar extends Toolbar implements PopupMenu.OnMenuItemCl
   }
 
   public boolean isSlideUp() {
-    return getHeight() != 0 && getTranslationY() == -getHeight();
+    return getHeight() != 0 && slidUp;
   }
 
   public boolean isExpanded() {

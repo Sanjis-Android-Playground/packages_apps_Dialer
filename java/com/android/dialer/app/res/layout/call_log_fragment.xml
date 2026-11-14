@@ -47,7 +47,6 @@
         android:paddingStart="@dimen/select_all_text_left_padding"
         android:gravity="center_vertical"
         android:text="@string/select_all"
-        android:textAllCaps="true"
         android:textColor="?android:attr/textColorPrimaryInverse"
         android:textSize="@dimen/select_all_text_size"/>
   </LinearLayout>
@@ -62,10 +61,10 @@
     android:id="@+id/recycler_view"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
-    android:paddingBottom="@dimen/floating_action_button_list_bottom_padding"
+    android:paddingTop="144dp"
     android:paddingStart="@dimen/call_log_horizontal_margin"
     android:paddingEnd="@dimen/call_log_horizontal_margin"
-    android:clipToPadding="false"/>
+    android:clipToPadding="true"/>
 
   <com.android.dialer.widget.EmptyContentView
     android:id="@+id/empty_list_view"

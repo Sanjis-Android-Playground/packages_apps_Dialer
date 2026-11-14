@@ -19,15 +19,19 @@ package com.android.dialer.main.impl;
 
 import android.content.Intent;
 import android.os.Bundle;
+import android.view.View;
 
 import androidx.annotation.NonNull;
 import androidx.localbroadcastmanager.content.LocalBroadcastManager;
+import androidx.preference.PreferenceManager;
 
 import com.android.dialer.R;
 import com.android.dialer.blockreportspam.ShowBlockReportSpamDialogReceiver;
 import com.android.dialer.common.LogUtil;
+import com.android.dialer.expressive.ExpressiveMainActivityPeer;
 import com.android.dialer.main.MainActivityPeer;
 import com.android.dialer.telecom.TelecomUtil;
+import com.android.dialer.main.impl.toolbar.MainToolbar;
 import com.android.dialer.util.TransactionSafeActivity;
 
 /** This is the main activity for dialer. It hosts favorites, call log, search, dialpad, etc... */
@@ -35,7 +39,18 @@ import com.android.dialer.util.TransactionSafeActivity;
 public class MainActivity extends TransactionSafeActivity
     implements MainActivityPeer.PeerSupplier {
 
+  public static final String PREF_UI_STYLE = "dialer_ui_style";
+  public static final String UI_STYLE_LUNARIS = "lunaris";
+  public static final String UI_STYLE_PENGUIN = "penguin";
+
   private MainActivityPeer activePeer;
+  private String mUiStyle;
+
+  public void onSearchClick(View view) {
+    MainToolbar toolbar = findViewById(R.id.toolbar);
+    toolbar.expand(true, java.util.Optional.empty(), true);
+    toolbar.showKeyboard();
+  }
 
   /**
    * {@link android.content.BroadcastReceiver} that shows a dialog to block a number and/or report
@@ -45,11 +60,15 @@ public class MainActivity extends TransactionSafeActivity
 
   @Override
   protected void onCreate(Bundle savedInstanceState) {
+    mUiStyle = PreferenceManager.getDefaultSharedPreferences(this)
+            .getString(PREF_UI_STYLE, UI_STYLE_LUNARIS);
     setTheme(R.style.MainActivityTheme);
     super.onCreate(savedInstanceState);
     LogUtil.enterBlock("MainActivity.onCreate");
 
-    activePeer = new com.android.dialer.expressive.ExpressiveMainActivityPeer(this);
+    activePeer = UI_STYLE_PENGUIN.equals(mUiStyle)
+            ? new OldMainActivityPeer(this)
+            : new ExpressiveMainActivityPeer(this);
     activePeer.onActivityCreate(savedInstanceState);
 
     showBlockReportSpamDialogReceiver =
@@ -66,6 +85,13 @@ public class MainActivity extends TransactionSafeActivity
   @Override
   protected void onResume() {
     super.onResume();
+
+    String style = PreferenceManager.getDefaultSharedPreferences(this)
+            .getString(PREF_UI_STYLE, UI_STYLE_LUNARIS);
+    if (!style.equals(mUiStyle)) {
+      recreate();
+      return;
+    }
 
     if (!TelecomUtil.isDefaultDialer(this)) {
       startActivity(new Intent(this, DefaultDialerActivity.class));

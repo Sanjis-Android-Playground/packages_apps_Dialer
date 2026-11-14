@@ -1,93 +1,147 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-  ~ Copyright (C) 2017 The Android Open Source Project
-  ~ Copyright (C) 2023 The LineageOS Project
-  ~
-  ~ Licensed under the Apache License, Version 2.0 (the "License");
-  ~ you may not use this file except in compliance with the License.
-  ~ You may obtain a copy of the License at
-  ~
-  ~      http://www.apache.org/licenses/LICENSE-2.0
-  ~
-  ~ Unless required by applicable law or agreed to in writing, software
-  ~ distributed under the License is distributed on an "AS IS" BASIS,
-  ~ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-  ~ See the License for the specific language governing permissions and
-  ~ limitations under the License
-  -->
+-->
 <RelativeLayout
     xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:id="@+id/root_layout"
     android:layout_width="match_parent"
-    android:layout_height="match_parent">
+    android:layout_height="match_parent"
+    android:background="?android:attr/colorBackground">
 
-  <!-- MainToolbar -->
-  <include
-      android:id="@+id/toolbar"
-      layout="@layout/toolbar_layout"/>
-
-  <androidx.coordinatorlayout.widget.CoordinatorLayout
-      android:id="@+id/coordinator_layout"
-      android:layout_width="match_parent"
-      android:layout_height="match_parent"
-      android:layout_below="@+id/toolbar"
-      android:layout_above="@+id/bottom_nav_bar">
-
-    <!-- Holds SpeedDial, Call Log, Contacts, Voicemail and Search fragments -->
-    <FrameLayout
-        android:id="@+id/fragment_container"
+    <eightbitlab.com.blurview.BlurTarget
+        android:id="@+id/main_content_blur_target"
         android:layout_width="match_parent"
-        android:layout_height="match_parent"/>
+        android:layout_height="match_parent">
+
+        <androidx.coordinatorlayout.widget.CoordinatorLayout
+            android:id="@+id/coordinator_layout"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent">
+
+            <FrameLayout
+                android:id="@+id/fragment_container"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"/>
+
+            <FrameLayout
+                android:id="@+id/search_fragment_container"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"/>
+
+            <include android:id="@+id/promotion_bottom_sheet"
+                     layout="@layout/promotion_bottom_sheet"/>
+
+        </androidx.coordinatorlayout.widget.CoordinatorLayout>
+    </eightbitlab.com.blurview.BlurTarget>
 
     <FrameLayout
-        android:id="@+id/search_fragment_container"
+        android:id="@+id/top_view"
         android:layout_width="match_parent"
-        android:layout_height="match_parent"/>
+        android:layout_height="144dp"
+        android:visibility="gone">
 
-    <com.android.dialer.widget.DialerFloatingActionButton
-        android:id="@+id/fab"
-        android:layout_width="wrap_content"
+        <androidx.cardview.widget.CardView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="64dp"
+            android:layout_marginEnd="64dp"
+            android:layout_marginBottom="24dp"
+            android:layout_gravity="bottom"
+            app:cardBackgroundColor="@color/dialer_segmented_track"
+            app:cardCornerRadius="24dp"
+            app:cardElevation="0dp">
+
+            <com.google.android.material.tabs.TabLayout
+                android:id="@+id/tabs"
+                android:layout_width="match_parent"
+                android:layout_height="46dp"
+                android:background="@android:color/transparent"
+                app:tabIndicator="@drawable/tab_indicator"
+                app:tabIndicatorColor="@color/dialer_segmented_thumb"
+                app:tabIndicatorAnimationDuration="250"
+                app:tabIndicatorAnimationMode="elastic"
+                app:tabIndicatorGravity="stretch"
+                app:tabSelectedTextColor="@color/dialer_label_primary"
+                app:tabRippleColor="@android:color/transparent"
+                android:visibility="gone"
+                app:tabTextAppearance="@style/MyCustomTabText"
+                app:tabTextColor="@color/dialer_label_primary"/>
+
+            </androidx.cardview.widget.CardView>
+        </FrameLayout>
+
+    <include
+        android:id="@+id/toolbar"
+        android:layout_alignParentTop="true"
+        layout="@layout/toolbar_layout"/>
+
+    <View
+        android:id="@+id/bottom_gradient_shadow"
+        android:layout_width="match_parent"
+        android:layout_height="220dp"
+        android:layout_alignParentBottom="true"
+        android:background="@drawable/bottom_shadow_gradient" />
+
+    <eightbitlab.com.blurview.BlurView
+        android:id="@+id/bottom_nav_blur_view"
+        android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_margin="16dp"
-        android:layout_gravity="end|bottom"
-        android:forceDarkAllowed="false"
-        android:src="@drawable/quantum_ic_dialpad_vd_theme_24"
-        android:tint="@color/dialer_fab_icon_color"
-        app:tint="@color/dialer_fab_icon_color"
-        android:contentDescription="@string/dialpad_button_content_description"
-        app:backgroundTint="@color/dialer_theme_color_light"/>
+        android:layout_alignParentBottom="true"
+        android:layout_marginStart="16dp"
+        android:layout_marginEnd="84dp"
+        android:layout_marginBottom="24dp"
+        android:clickable="true"
+        android:focusable="true"
+        android:elevation="8dp"
+        app:blurOverlayColor="@color/dialer_glass_tint">
 
-    <include android:id="@+id/promotion_bottom_sheet"
-        layout="@layout/promotion_bottom_sheet"/>
-  </androidx.coordinatorlayout.widget.CoordinatorLayout>
+        <include layout="@layout/bottom_nav_bar_layout"/>
 
-  <!-- BottomNavBar -->
-  <include
-      android:id="@+id/bottom_nav_bar"
-      layout="@layout/bottom_nav_bar_layout"
-      android:layout_width="match_parent"
-      android:layout_height="wrap_content"
-      android:layout_alignParentBottom="true"/>
+    </eightbitlab.com.blurview.BlurView>
+    <eightbitlab.com.blurview.BlurView
+        android:id="@+id/search_background_main"
+        android:layout_width="64dp"
+        android:layout_height="64dp"
+        android:layout_alignParentBottom="true"
+        android:layout_alignParentEnd="true"
+        android:layout_marginEnd="24dp"
+        android:layout_marginBottom="24dp"
+        android:elevation="4dp"
+        android:translationX="12dp"
+        android:visibility="gone"
+        android:background="@drawable/icon_background_circle"
+        app:blurOverlayColor="@color/dialer_glass_tint">
 
-  <!-- Holds Dialpad fragment -->
-  <FrameLayout
-      android:id="@+id/dialpad_fragment_container"
-      android:layout_width="match_parent"
-      android:layout_height="match_parent"
-      android:elevation="10dp"/>
+        <ImageButton
+            android:id="@+id/search_magnifying_glass_main"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:scaleType="center"
+            android:src="@drawable/quantum_ic_search_vd_theme_24"
+            android:tint="@color/dialer_fab_icon_color"
+            app:tint="@color/dialer_fab_icon_color"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:contentDescription="@string/dialer_hint_find_contact"/>
 
-  <!-- TODO(calderwoodra): investigate what this is for and why we want it. -->
-  <!-- Host container for the contact tile drag shadow -->
-  <FrameLayout
-      android:id="@+id/activity_overlay"
-      android:layout_width="match_parent"
-      android:layout_height="match_parent">
-    <ImageView
-        android:id="@+id/contact_tile_drag_shadow_overlay"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:importantForAccessibility="no"
-        android:visibility="gone"/>
-  </FrameLayout>
+</eightbitlab.com.blurview.BlurView>
+    <!-- Holds Dialpad fragment -->
+    <FrameLayout
+        android:id="@+id/dialpad_fragment_container"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:elevation="0dp"/>
+
+    <FrameLayout
+        android:id="@+id/activity_overlay"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent">
+        <ImageView
+            android:id="@+id/contact_tile_drag_shadow_overlay"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:importantForAccessibility="no"
+            android:visibility="gone"/>
+        </FrameLayout>
+
 </RelativeLayout>

@@ -318,6 +318,7 @@ public class DialpadFragment extends Fragment
       if (activity != null) {
         activity.invalidateOptionsMenu();
         updateMenuOverflowButton(wasEmptyBeforeTextChange);
+        updateDeleteButtonVisibility(wasEmptyBeforeTextChange);
       }
       updateDialpadHint();
     }
@@ -345,8 +346,6 @@ public class DialpadFragment extends Fragment
     if (dialpadQueryListener != null) {
       dialpadQueryListener.onDialpadQueryChanged(digits.getText().toString());
     }
-
-    updateDeleteButtonEnabledState();
   }
 
   @Override
@@ -418,6 +417,13 @@ public class DialpadFragment extends Fragment
     }
 
     delete = dialpadView.getDeleteButton();
+    View deleteBesideCallButton = fragmentView.findViewById(R.id.dialpad_delete_button);
+    if (deleteBesideCallButton != null) {
+      if (delete != null) {
+        delete.setVisibility(View.GONE);
+      }
+      delete = deleteBesideCallButton;
+    }
 
     if (delete != null) {
       delete.setOnClickListener(this);
@@ -717,7 +723,6 @@ public class DialpadFragment extends Fragment
     }
     floatingActionButtonController.changeIcon(
         getContext(), iconId, res.getString(R.string.description_dial_button));
-    floatingActionButtonController.changeIconColor(getContext(), R.color.dialer_call_icon_color);
 
     // if the mToneGenerator creation fails, just continue without it.  It is
     // a local audio signal, and is not as important as the dtmf tone itself.
@@ -768,8 +773,9 @@ public class DialpadFragment extends Fragment
       // A sanity-check: the "dialpad chooser" UI should not be visible if the phone is idle.
       showDialpadChooser(false);
     }
-
-    updateDeleteButtonEnabledState();
+    if (isDialpadSlideUp && !isDialpadChooserVisible()) {
+      floatingActionButtonController.showImmediately();
+    }
 
     // Populate the overflow menu in onResume instead of onCreate, so that if the SMS activity
     // is disabled while Dialer is paused, the "Send a text message" option can be correctly
@@ -779,6 +785,7 @@ public class DialpadFragment extends Fragment
     overflowMenuButton.setOnTouchListener(overflowPopupMenu.getDragToOpenListener());
     overflowMenuButton.setOnClickListener(this);
     overflowMenuButton.setVisibility(isDigitsEmpty() ? View.INVISIBLE : View.VISIBLE);
+    delete.setVisibility(isDigitsEmpty() ? View.INVISIBLE : View.VISIBLE);
 
     updateDialpadHint();
 
@@ -813,7 +820,6 @@ public class DialpadFragment extends Fragment
     LogUtil.enterBlock("DialpadFragment.onStop");
     super.onStop();
 
-    floatingActionButtonController.scaleOut();
     synchronized (toneGeneratorLock) {
       if (toneGenerator != null) {
         toneGenerator.release();
@@ -842,6 +848,14 @@ public class DialpadFragment extends Fragment
       pseudoEmergencyAnimator = null;
     }
     getActivity().unregisterReceiver(callStateReceiver);
+  }
+
+  @Override
+  public void onConfigurationChanged(@NonNull Configuration newConfig) {
+    super.onConfigurationChanged(newConfig);
+    if (isAdded() && !isHidden() && !isDialpadChooserVisible()) {
+      FragmentUtils.getParentUnsafe(this, DialpadListener.class).onDialpadShown();
+    }
   }
 
   private void keyPressed(int keyCode) {
@@ -1024,7 +1038,7 @@ public class DialpadFragment extends Fragment
     if (resId == R.id.dialpad_floating_action_button) {
       view.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY);
       handleDialButtonPressed();
-    } else if (resId == R.id.deleteButton) {
+    } else if (resId == R.id.deleteButton || resId == R.id.dialpad_delete_button) {
       keyPressed(KeyEvent.KEYCODE_DEL);
     } else if (resId == R.id.digits) {
       if (!isDigitsEmpty()) {
@@ -1041,7 +1055,7 @@ public class DialpadFragment extends Fragment
   public boolean onLongClick(View view) {
     final Editable digits = this.digits.getText();
     final int id = view.getId();
-    if (id == R.id.deleteButton) {
+    if (id == R.id.deleteButton || id == R.id.dialpad_delete_button) {
       digits.clear();
       return true;
     } else if (id == R.id.one) {
@@ -1442,13 +1456,21 @@ public class DialpadFragment extends Fragment
     }
   }
 
-  /** Update the enabledness of the "Dial" and "Backspace" buttons if applicable. */
-  private void updateDeleteButtonEnabledState() {
-    if (getActivity() == null) {
-      return;
+  private void updateDeleteButtonVisibility(boolean transitionIn) {
+    if (transitionIn) {
+      delete.setVisibility(View.VISIBLE);
+      AnimUtils.fadeIn(delete, AnimUtils.DEFAULT_DURATION);
+    } else {
+      AnimUtils.fadeOut(
+          delete,
+          AnimUtils.DEFAULT_DURATION,
+          new AnimationCallback() {
+            @Override
+            public void onAnimationEnd() {
+              delete.setVisibility(View.INVISIBLE);
+            }
+          });
     }
-    final boolean digitsNotEmpty = !isDigitsEmpty();
-    delete.setEnabled(digitsNotEmpty);
   }
 
   /**
@@ -1529,7 +1551,6 @@ public class DialpadFragment extends Fragment
                 return;
               }
               lastNumberDialed = number;
-              updateDeleteButtonEnabledState();
             });
   }
 
@@ -1613,13 +1634,20 @@ public class DialpadFragment extends Fragment
     slideDown.setAnimationListener(listener);
     slideDown.setDuration(animate ? dialpadSlideInDuration : 0);
     getView().startAnimation(slideDown);
-    floatingActionButtonController.scaleOut();
+    if (animate) {
+      floatingActionButtonController.scaleOut();
+    }
   }
 
   /** Animate the dialpad up onto the screen. */
   public void slideUp(boolean animate) {
     Assert.checkArgument(!isDialpadSlideUp);
     isDialpadSlideUp = true;
+    if (!animate) {
+      getView().clearAnimation();
+      floatingActionButtonController.showImmediately();
+      return;
+    }
     int animation;
     if (isLandscape) {
       animation = isLayoutRtl ? R.anim.dialpad_slide_in_left : R.anim.dialpad_slide_in_right;

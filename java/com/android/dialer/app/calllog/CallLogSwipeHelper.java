@@ -1,0 +1,173 @@
+package com.android.dialer.app.calllog;
+
+import android.content.Context;
+import android.content.SharedPreferences;
+import android.content.res.Resources;
+import android.graphics.Canvas;
+import android.graphics.Paint;
+import android.graphics.Path;
+import android.graphics.PorterDuff;
+import android.graphics.RectF;
+import android.graphics.drawable.Drawable;
+import android.util.TypedValue;
+import android.view.View;
+
+import androidx.core.content.ContextCompat;
+import androidx.preference.PreferenceManager;
+import androidx.recyclerview.widget.ItemTouchHelper;
+import androidx.recyclerview.widget.RecyclerView;
+
+import com.android.dialer.R;
+import com.android.dialer.widget.SwipeAndDragHelper;
+
+public class CallLogSwipeHelper extends SwipeAndDragHelper {
+
+    private static final float SWIPE_CORNER_RADIUS_DP = 18f;
+
+    private static final float SWIPE_THRESHOLD = 0.4f;
+    private static final float SWIPE_ESCAPE_VELOCITY_MULTIPLIER = 1.5f;
+    private static final float MIN_SWIPE_ALPHA = 0.4f;
+
+    private final Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final RectF background = new RectF();
+    private final Path backgroundPath = new Path();
+    private final float[] radii = new float[8];
+
+    private final SharedPreferences prefs;
+    private final String swipeActionsKey;
+    private final boolean swipeActionsDefault;
+
+    public CallLogSwipeHelper(Context context, ActionCompletionContract contract) {
+        super(contract);
+        prefs = PreferenceManager.getDefaultSharedPreferences(context);
+        swipeActionsKey = context.getString(R.string.call_log_swipe_actions_key);
+        swipeActionsDefault = context.getResources().getBoolean(R.bool.call_log_swipe_actions_default);
+    }
+
+    @Override
+    public int getMovementFlags(RecyclerView recyclerView, RecyclerView.ViewHolder viewHolder) {
+        if (!(viewHolder instanceof CallLogListItemViewHolder)
+                || !prefs.getBoolean(swipeActionsKey, swipeActionsDefault)) {
+            return 0;
+        }
+        return makeMovementFlags(0, ItemTouchHelper.LEFT | ItemTouchHelper.RIGHT);
+    }
+
+    @Override
+    public float getSwipeThreshold(RecyclerView.ViewHolder viewHolder) {
+        return SWIPE_THRESHOLD;
+    }
+
+    @Override
+    public float getSwipeEscapeVelocity(float defaultValue) {
+        return defaultValue * SWIPE_ESCAPE_VELOCITY_MULTIPLIER;
+    }
+
+    @Override
+    public void onChildDraw(Canvas c, RecyclerView recyclerView, RecyclerView.ViewHolder viewHolder,
+                            float dX, float dY, int actionState, boolean isCurrentlyActive) {
+
+        if (!(viewHolder instanceof CallLogListItemViewHolder)) {
+            super.onChildDraw(c, recyclerView, viewHolder, dX, dY, actionState, isCurrentlyActive);
+            return;
+        }
+
+        CallLogListItemViewHolder holder = (CallLogListItemViewHolder) viewHolder;
+        View itemView = holder.itemView;
+        View cardView = holder.callLogEntryView;
+        Context context = cardView.getContext();
+
+        float cardLeft = itemView.getLeft() + cardView.getLeft();
+        float cardTop = itemView.getTop() + cardView.getTop();
+        float cardRight = cardLeft + cardView.getWidth();
+        float cardBottom = cardTop + cardView.getHeight();
+
+        if (actionState == ItemTouchHelper.ACTION_STATE_SWIPE && dX != 0) {
+            boolean isSwipingRight = dX > 0;
+
+            float backgroundLeft = cardLeft;
+            float backgroundRight = cardRight;
+
+            c.save();
+            c.clipRect(backgroundLeft, cardTop, backgroundRight, cardBottom);
+
+            paint.setColor(ContextCompat.getColor(context, isSwipingRight
+                    ? R.color.dialer_call_green
+                    : R.color.dialer_end_call_button_color));
+
+            background.set(backgroundLeft, cardTop, backgroundRight, cardBottom);
+            setCornerRadii(context, background);
+            backgroundPath.rewind();
+            backgroundPath.addRoundRect(background, radii, Path.Direction.CW);
+            c.drawPath(backgroundPath, paint);
+
+            drawActionIcon(c, context, cardView, itemView, cardTop, dX, isSwipingRight);
+
+            c.restore();
+        }
+
+        float progress = Math.min(1f, Math.abs(dX) / (float) cardView.getWidth());
+        cardView.setAlpha(1f - (1f - MIN_SWIPE_ALPHA) * progress);
+        cardView.setTranslationX(dX);
+        holder.callLogEntryView.setRadius(
+                dX != 0 ? dpToPx(context, SWIPE_CORNER_RADIUS_DP) : 0f);
+    }
+
+    private void setCornerRadii(Context context, RectF rect) {
+        float radius = Math.min(
+                dpToPx(context, SWIPE_CORNER_RADIUS_DP),
+                Math.min(rect.width(), rect.height()) / 2f);
+        java.util.Arrays.fill(radii, radius);
+    }
+
+    private void drawActionIcon(Canvas c, Context context, View cardView, View itemView,
+                                float cardTop, float dX, boolean isSwipingRight) {
+        Drawable icon = ContextCompat.getDrawable(context, isSwipingRight
+                ? R.drawable.quantum_ic_call_vd_theme_24
+                : R.drawable.quantum_ic_delete_vd_theme_24);
+        if (icon == null) {
+            return;
+        }
+
+        TypedValue typedValue = new TypedValue();
+        Resources.Theme theme = context.getTheme();
+        theme.resolveAttribute(android.R.attr.textColorPrimary, typedValue, true);
+        int tintColor = ContextCompat.getColor(context, typedValue.resourceId);
+        icon = icon.mutate();
+        icon.setColorFilter(tintColor, PorterDuff.Mode.SRC_IN);
+
+        int iconSize = icon.getIntrinsicHeight();
+        int iconMargin = (cardView.getHeight() - iconSize) / 2;
+        int iconAreaWidth = iconSize + (2 * iconMargin);
+
+        float reveal = Math.min(1f, Math.abs(dX) / (float) Math.max(1, iconAreaWidth));
+        icon.setAlpha((int) (reveal * 255));
+
+        int top = (int) (cardTop + iconMargin);
+        int bottom = top + iconSize;
+        if (isSwipingRight) {
+            int left = itemView.getLeft() + iconMargin;
+            icon.setBounds(left, top, left + iconSize, bottom);
+        } else {
+            int right = itemView.getRight() - iconMargin;
+            icon.setBounds(right - iconSize, top, right, bottom);
+        }
+        icon.draw(c);
+    }
+
+    private static float dpToPx(Context context, float dp) {
+        return TypedValue.applyDimension(
+                TypedValue.COMPLEX_UNIT_DIP, dp, context.getResources().getDisplayMetrics());
+    }
+
+    @Override
+    public void clearView(RecyclerView recyclerView, RecyclerView.ViewHolder viewHolder) {
+        if (viewHolder instanceof CallLogListItemViewHolder) {
+            View cardView = ((CallLogListItemViewHolder) viewHolder).callLogEntryView;
+            ((CallLogListItemViewHolder) viewHolder).callLogEntryView.setRadius(0f);
+            cardView.setTranslationX(0f);
+            cardView.setAlpha(1.0f);
+        }
+        super.clearView(recyclerView, viewHolder);
+    }
+}

@@ -1,0 +1,92 @@
+package com.android.dialer.app.calllog;
+
+import android.os.Bundle;
+import android.provider.CallLog.Calls;
+import android.view.LayoutInflater;
+import android.view.View;
+import android.view.ViewGroup;
+
+import androidx.annotation.NonNull;
+import androidx.fragment.app.Fragment;
+import androidx.fragment.app.FragmentManager;
+import androidx.fragment.app.FragmentPagerAdapter;
+
+import com.android.dialer.R;
+import com.android.dialer.database.CallLogQueryHandler;
+import com.android.dialer.widget.LockableViewPager;
+import com.google.android.material.tabs.TabLayout;
+
+public class NewCallLogFragment extends Fragment {
+
+    private static final int TAB_INDEX_ALL = 0;
+    private static final int TAB_INDEX_MISSED = 1;
+    private static final int TAB_INDEX_COUNT = 2;
+
+    private LockableViewPager viewPager;
+    private CharSequence[] tabTitles;
+
+    @Override
+    public View onCreateView(LayoutInflater inflater, ViewGroup container, Bundle savedInstanceState) {
+        View view = inflater.inflate(R.layout.new_call_log_fragment, container, false);
+        tabTitles = new CharSequence[] {
+            getText(R.string.call_log_all_title), getText(R.string.call_log_missed_title)
+        };
+
+        viewPager = view.findViewById(R.id.new_call_log_pager);
+        viewPager.setSwipingLocked(true);
+        viewPager.setAdapter(new ViewPagerAdapter(getChildFragmentManager()));
+        viewPager.setOffscreenPageLimit(1);
+
+        TabLayout tabLayout = requireActivity().findViewById(R.id.tabs);
+        tabLayout.clearOnTabSelectedListeners();
+        tabLayout.removeAllTabs();
+        for (CharSequence title : tabTitles) {
+            tabLayout.addTab(tabLayout.newTab().setText(title), false);
+        }
+        tabLayout.selectTab(tabLayout.getTabAt(viewPager.getCurrentItem()));
+        tabLayout.addOnTabSelectedListener(new TabLayout.OnTabSelectedListener() {
+            @Override
+            public void onTabSelected(@NonNull TabLayout.Tab tab) {
+                int position = tab.getPosition();
+                viewPager.post(() -> viewPager.setCurrentItem(position, false));
+            }
+
+            @Override
+            public void onTabUnselected(@NonNull TabLayout.Tab tab) {}
+
+            @Override
+            public void onTabReselected(@NonNull TabLayout.Tab tab) {}
+        });
+
+        return view;
+    }
+
+    public class ViewPagerAdapter extends FragmentPagerAdapter {
+
+        public ViewPagerAdapter(FragmentManager fm) {
+            super(fm, BEHAVIOR_RESUME_ONLY_CURRENT_FRAGMENT);
+        }
+
+        @Override
+        public Fragment getItem(int position) {
+            switch (position) {
+                case TAB_INDEX_ALL:
+                    return new CallLogFragment(CallLogQueryHandler.CALL_TYPE_ALL, false);
+                case TAB_INDEX_MISSED:
+                    return new CallLogFragment(Calls.MISSED_TYPE, false);
+                default:
+                    throw new IllegalStateException("No fragment at position " + position);
+            }
+        }
+
+        @Override
+        public CharSequence getPageTitle(int position) {
+            return tabTitles[position];
+        }
+
+        @Override
+        public int getCount() {
+            return TAB_INDEX_COUNT;
+        }
+    }
+}

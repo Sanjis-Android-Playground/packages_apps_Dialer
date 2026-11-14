@@ -19,17 +19,10 @@
 <PreferenceScreen xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto">
 
-  <SwitchPreferenceCompat
-      android:key="monochrome_theme"
-      android:title="@string/expressive_monochrome_theme"
-      android:summary="@string/expressive_monochrome_theme_summary"
-      android:defaultValue="false"
-      app:iconSpaceReserved="false"/>
-
   <ListPreference
       android:dialogTitle="@string/display_options_sort_list_by"
       android:key="@string/display_options_sort_list_by_key"
-      android:summary="@string/expressive_settings_sort_summary"
+      android:summary="%s"
       android:entries="@array/contact_sort_order_entries"
       android:entryValues="@array/contact_sort_order_values"
       android:title="@string/display_options_sort_list_by"
@@ -39,7 +32,7 @@
   <ListPreference
       android:dialogTitle="@string/display_options_view_names_as"
       android:key="@string/display_options_view_names_as_key"
-      android:summary="@string/expressive_settings_name_order_summary"
+      android:summary="%s"
       android:entries="@array/contact_display_order_entries"
       android:entryValues="@array/contact_display_order_values"
       android:title="@string/display_options_view_names_as"
@@ -47,87 +40,10 @@
       app:iconSpaceReserved="false"/>
 
   <SwitchPreferenceCompat
-      android:key="group_contacts_by_name"
-      android:title="@string/group_contacts_by_name_title"
-      android:summary="@string/group_contacts_by_name_summary"
-      android:defaultValue="true"
-      app:iconSpaceReserved="false"/>
-
-  <!-- The settings fragment migrates the legacy boolean before inflation. -->
-  <ListPreference
-      android:key="caller_screen_style"
-      android:title="@string/caller_screen_style_title"
-      android:dialogTitle="@string/caller_screen_style_title"
-      android:entries="@array/caller_screen_style_entries"
-      android:entryValues="@array/caller_screen_style_values"
-      app:iconSpaceReserved="false"/>
-
-  <SwitchPreferenceCompat
-      android:key="rounded_call_screen_controls"
-      android:title="@string/rounded_call_screen_controls_title"
-      android:summary="@string/rounded_call_screen_controls_summary"
-      android:defaultValue="false"
-      app:iconSpaceReserved="false"/>
-
-  <SwitchPreferenceCompat
-      android:key="hide_call_status_bar"
-      android:title="@string/hide_call_status_bar_title"
-      android:summary="@string/hide_call_status_bar_summary"
-      android:defaultValue="true"
-      app:iconSpaceReserved="false"/>
-
-  <SwitchPreferenceCompat
-      android:key="compact_floating_bar"
-      android:title="@string/compact_floating_bar_title"
-      android:summary="@string/compact_floating_bar_summary"
-      android:defaultValue="false"
-      app:iconSpaceReserved="false"/>
-
-  <MultiSelectListPreference
-      android:key="hidden_nav_items"
-      android:title="@string/hidden_nav_items_title"
-      android:dialogTitle="@string/hidden_nav_items_title"
-      android:summary="@string/hidden_nav_items_summary"
-      android:entries="@array/nav_item_entries"
-      android:entryValues="@array/nav_item_values"
-      app:iconSpaceReserved="false"/>
-
-  <SwitchPreferenceCompat
-      android:key="bottom_dialpad_backspace"
-      android:title="@string/expressive_bottom_dialpad_backspace"
-      android:summary="@string/expressive_bottom_dialpad_backspace_summary"
-      android:defaultValue="true"
-      app:iconSpaceReserved="false"/>
-
-  <SwitchPreferenceCompat
-      android:key="hide_keyboard_on_scroll"
-      android:title="@string/hide_keyboard_on_scroll_title"
-      android:summary="@string/hide_keyboard_on_scroll_summary"
-      android:defaultValue="true"
-      app:iconSpaceReserved="false"/>
-
-  <SwitchPreferenceCompat
-      android:key="hide_saved_contact_number"
-      android:title="@string/expressive_hide_saved_contact_number"
-      android:summary="@string/expressive_hide_saved_contact_number_summary"
-      android:defaultValue="false"
-      app:iconSpaceReserved="false"/>
-
-  <SwitchPreferenceCompat
-      android:key="caller_screen_spam_warning"
-      android:title="@string/expressive_caller_screen_spam_warning"
-      android:summary="@string/expressive_caller_screen_spam_warning_summary"
-      android:defaultValue="true"
-      app:iconSpaceReserved="false"/>
-
-  <ListPreference
-      android:dialogTitle="@string/expressive_incoming_call_style"
-      android:key="incoming_call_style"
-      android:title="@string/expressive_incoming_call_style"
-      android:summary="@string/expressive_incoming_call_style_summary"
-      android:entries="@array/expressive_incoming_call_style_entries"
-      android:entryValues="@array/expressive_incoming_call_style_values"
-      android:defaultValue="default"
+      android:key="@string/call_log_swipe_actions_key"
+      android:title="@string/call_log_swipe_actions_title"
+      android:summary="@string/call_log_swipe_actions_summary"
+      android:defaultValue="@bool/call_log_swipe_actions_default"
       app:iconSpaceReserved="false"/>
 
 </PreferenceScreen>

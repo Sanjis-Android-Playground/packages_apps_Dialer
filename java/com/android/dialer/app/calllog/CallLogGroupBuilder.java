@@ -20,6 +20,7 @@ import android.database.Cursor;
 import android.provider.CallLog.Calls;
 import android.telephony.PhoneNumberUtils;
 import android.text.TextUtils;
+import android.util.ArrayMap;
 
 import androidx.annotation.Nullable;
 
@@ -29,6 +30,7 @@ import com.android.dialer.calllogutils.CallbackActionHelper.CallbackAction;
 import com.android.dialer.compat.telephony.TelephonyManagerCompat;
 import com.android.dialer.phonenumbercache.CallLogQuery;
 import com.android.dialer.phonenumberutil.PhoneNumberHelper;
+import com.android.dialer.universaldialer.UniversalDialer;
 
 import java.time.ZoneId;
 
@@ -85,6 +87,9 @@ public class CallLogGroupBuilder {
 
     // Get current system time, used for calculating which day group calls belong to.
     long currentTime = System.currentTimeMillis();
+    ArrayMap<String, Boolean> numberInDayGroup = new ArrayMap<>();
+    int currentDayGroup = -1;
+
     cursor.moveToFirst();
 
     // Determine the day group for the first call in the cursor.
@@ -92,6 +97,7 @@ public class CallLogGroupBuilder {
     final long firstRowId = cursor.getLong(CallLogQuery.ID);
     int groupDayGroup = getDayGroup(firstDate, currentTime);
     groupCreator.setDayGroup(firstRowId, groupDayGroup);
+    currentDayGroup = groupDayGroup;
 
     // Determine the callback action for the first call in the cursor.
     String groupNumber = cursor.getString(CallLogQuery.NUMBER);
@@ -155,9 +161,18 @@ public class CallLogGroupBuilder {
         final long date = cursor.getLong(CallLogQuery.DATE);
         groupDayGroup = getDayGroup(date, currentTime);
 
-        // Create a group for the previous group of calls, which does not include the
-        // current call.
-        groupCreator.addGroup(cursor.getPosition() - groupSize, groupSize);
+        if (groupDayGroup != currentDayGroup) {
+          if (!numberInDayGroup.containsKey(dayGroupKey(groupNumber, groupAccountComponentName))) {
+            groupCreator.addGroup(cursor.getPosition() - groupSize, groupSize);
+          }
+          numberInDayGroup.clear();
+          currentDayGroup = groupDayGroup;
+        } else {
+          if (!numberInDayGroup.containsKey(dayGroupKey(groupNumber, groupAccountComponentName))) {
+            groupCreator.addGroup(cursor.getPosition() - groupSize, groupSize);
+            numberInDayGroup.put(dayGroupKey(groupNumber, groupAccountComponentName), true);
+          }
+        }
 
         // Start a new group; it will include at least the current call.
         groupSize = 1;
@@ -180,7 +195,9 @@ public class CallLogGroupBuilder {
     }
 
     // Create a group for the last set of calls.
-    groupCreator.addGroup(count - groupSize, groupSize);
+    if (!numberInDayGroup.containsKey(dayGroupKey(groupNumber, groupAccountComponentName))) {
+      groupCreator.addGroup(count - groupSize, groupSize);
+    }
   }
 
   /**
@@ -202,6 +219,12 @@ public class CallLogGroupBuilder {
     }
 
     return PhoneNumberUtils.compare(number1, number2);
+  }
+
+  private static String dayGroupKey(String number, @Nullable String accountComponentName) {
+    return UniversalDialer.isVoipAccount(accountComponentName)
+        ? number + '\n' + accountComponentName
+        : number;
   }
 
   private boolean isSameAccount(String name1, String name2, String id1, String id2) {

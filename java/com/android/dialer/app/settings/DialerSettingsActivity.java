@@ -34,6 +34,7 @@ import android.widget.Toast;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.fragment.app.Fragment;
+import androidx.preference.ListPreference;
 import androidx.preference.Preference;
 import androidx.preference.PreferenceFragmentCompat;
 import androidx.preference.PreferenceManager;
@@ -88,6 +89,16 @@ public class DialerSettingsActivity extends BaseActivity implements
     @Override
     public void onCreatePreferences(@Nullable Bundle savedInstanceState, @Nullable String rootKey) {
       setPreferenceScreen(getPreferenceManager().createPreferenceScreen(requireContext()));
+
+      ListPreference uiStyle = new ListPreference(getContext());
+      uiStyle.setKey(com.android.dialer.main.impl.MainActivity.PREF_UI_STYLE);
+      uiStyle.setTitle(R.string.dialer_ui_style_title);
+      uiStyle.setSummaryProvider(ListPreference.SimpleSummaryProvider.getInstance());
+      uiStyle.setEntries(R.array.dialer_ui_style_entries);
+      uiStyle.setEntryValues(R.array.dialer_ui_style_values);
+      uiStyle.setDefaultValue(com.android.dialer.main.impl.MainActivity.UI_STYLE_LUNARIS);
+      uiStyle.setIconSpaceReserved(false);
+      getPreferenceScreen().addPreference(uiStyle);
 
       // Caller layout is configurable even in locales with a fixed contact name order.
       Preference displayOptions = new Preference(getContext());

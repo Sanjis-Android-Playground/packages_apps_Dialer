@@ -1,24 +1,28 @@
-<?xml version="1.0" encoding="utf-8"?>
-<!--
-  ~ Copyright (C) 2012 The Android Open Source Project
-  ~
-  ~ Licensed under the Apache License, Version 2.0 (the "License");
-  ~ you may not use this file except in compliance with the License.
-  ~ You may obtain a copy of the License at
-  ~
-  ~      http://www.apache.org/licenses/LICENSE-2.0
-  ~
-  ~ Unless required by applicable law or agreed to in writing, software
-  ~ distributed under the License is distributed on an "AS IS" BASIS,
-  ~ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-  ~ See the License for the specific language governing permissions and
-  ~ limitations under the License
-  -->
-<!-- The colors in this file aren't configured at the theme level. -->
+<?xml version='1.0' encoding='utf-8'?>
 <resources>
-  <color name="dialer_call_green">#3ee0a0</color>
-  <color name="dialer_end_call_button_color">#e46962</color>
-  <color name="dialer_link_color">#b5c4ff</color>
+  <color name="dialer_call_green">#30D158</color>
+  <color name="dialer_end_call_button_color">@color/dialer_system_red</color>
+  <color name="dialer_link_color">#0A84FF</color>
   <color name="dialer_snackbar_action_text_color">@android:color/system_accent1_600</color>
   <color name="dialer_call_icon_color">@android:color/black</color>
+  <color name="dialpad_key_circle_bg">#26FFFFFF</color>
+  <color name="dialpad_key_circle_pressed_bg">#73FFFFFF</color>
+  <color name="dialer_grouped_background">#000000</color>
+  <color name="dialer_grouped_cell">#1C1C1E</color>
+  <color name="dialer_grouped_separator">#99545458</color>
+  <color name="dialer_tab_selected_fill">#3DFFFFFF</color>
+  <color name="dialer_tint">@color/dialer_label_primary</color>
+  <color name="dialer_label_primary">#FFFFFFFF</color>
+  <color name="dialer_label_secondary">#99EBEBF5</color>
+  <color name="dialer_menu_background">#FF2C2C2E</color>
+  <color name="dialer_segmented_track">#FF1C1C1E</color>
+  <color name="dialer_segmented_thumb">#FF636366</color>
+  <color name="dialer_round_button_fill">#FF1C1C1E</color>
+  <color name="dialer_system_red">#FF453A</color>
+  <color name="dialer_tab_bar_scrim_start">#F5000000</color>
+  <color name="dialer_tab_bar_scrim_center">#B0000000</color>
+  <color name="dialer_tab_bar_scrim_end">#00000000</color>
+  <color name="dialer_glass_tint">#592C2C2E</color>
+  <color name="dialer_glass_stroke">#33CCCCCC</color>
+  <color name="dialer_fill_tertiary">#3D767680</color>
 </resources>

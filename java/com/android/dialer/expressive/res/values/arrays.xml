@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string-array name="dialer_ui_style_entries">
+        <item>@string/dialer_ui_style_lunaris</item>
+        <item>@string/dialer_ui_style_penguin</item>
+    </string-array>
+    <string-array name="dialer_ui_style_values" translatable="false">
+        <item>lunaris</item>
+        <item>penguin</item>
+    </string-array>
+</resources>

@@ -38,6 +38,7 @@ import com.android.contacts.common.database.NoNullCursorAsyncQueryHandler;
 import com.android.dialer.common.LogUtil;
 import com.android.dialer.phonenumbercache.CallLogQuery;
 import com.android.dialer.telecom.TelecomUtil;
+import com.android.dialer.universaldialer.UniversalDialer;
 import com.android.dialer.util.PermissionsUtil;
 import com.android.dialer.voicemailstatus.VoicemailStatusQuery;
 import com.android.voicemail.VoicemailComponent;
@@ -200,7 +201,7 @@ public class CallLogQueryHandler extends NoNullCursorAsyncQueryHandler {
     final int limit = (logLimit == -1) ? NUM_LOGS_TO_DISPLAY : logLimit;
     final String selection = where.length() > 0 ? where.toString() : null;
     Uri uri =
-        TelecomUtil.getCallLogUri(context)
+        UniversalDialer.callLogUri(context, TelecomUtil.getCallLogUri(context))
             .buildUpon()
             .appendQueryParameter(Calls.LIMIT_PARAM_KEY, Integer.toString(limit))
             .build();
@@ -292,11 +293,10 @@ public class CallLogQueryHandler extends NoNullCursorAsyncQueryHandler {
 
   /** @return Query string to get all unread missed calls. */
   private String getUnreadMissedCallsQuery() {
-    return "("
-        + Calls.IS_READ
+    return Calls.IS_READ
         + " = 0 OR "
         + Calls.IS_READ
-        + " IS NULL)"
+        + " IS NULL"
         + " AND "
         + Calls.TYPE
         + " = "
