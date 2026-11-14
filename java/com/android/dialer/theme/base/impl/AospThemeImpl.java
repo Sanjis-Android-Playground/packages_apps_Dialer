@@ -18,6 +18,7 @@
 package com.android.dialer.theme.base.impl;
 
 import android.content.Context;
+import android.content.res.Configuration;
 import android.content.res.TypedArray;
 import android.view.ContextThemeWrapper;
 import android.view.LayoutInflater;
@@ -36,6 +37,7 @@ import javax.inject.Singleton;
 @Singleton
 public class AospThemeImpl implements Theme {
 
+  private final Context context;
   private int colorIcon = -1;
   private int colorIconSecondary = -1;
   private int colorPrimary = -1;
@@ -53,7 +55,8 @@ public class AospThemeImpl implements Theme {
 
   public AospThemeImpl(Context context) {
 
-    context = context.getApplicationContext();
+    this.context = context.getApplicationContext();
+    context = this.context;
     context.setTheme(getApplicationThemeRes());
     TypedArray array =
         context
@@ -99,8 +102,16 @@ public class AospThemeImpl implements Theme {
    */
   @Override
   public @Type int getTheme() {
-    // TODO(a bug): add share prefs check to configure this
-    return LIGHT;
+    int currentNightMode = context.getResources().getConfiguration().uiMode
+        & Configuration.UI_MODE_NIGHT_MASK;
+    switch (currentNightMode) {
+      case Configuration.UI_MODE_NIGHT_NO:
+        return LIGHT;
+      case Configuration.UI_MODE_NIGHT_YES:
+        return DARK;
+      default:
+        return LIGHT;
+    }
   }
 
   @Override
