@@ -11,18 +11,23 @@
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
- * limitations under the License
+ * limitations under the License.
  */
 
 package com.android.incallui.incall.bindings;
 
-import com.android.incallui.incall.impl.InCallFragment;
+import android.content.Context;
+
+import com.android.dialer.util.DialerUiStyle;
 import com.android.incallui.incall.protocol.InCallScreen;
 
 /** Bindings for the in call module. */
 public class InCallBindings {
 
-  public static InCallScreen createInCallScreen() {
+  public static InCallScreen createInCallScreen(Context context) {
+    if (DialerUiStyle.isPenguin(context)) {
+      return new com.android.incallui.incall.impl.InCallFragment();
+    }
     return new com.android.dialer.expressive.ExpressiveCallFragment();
   }
 }

@@ -38,6 +38,9 @@ public final class LiquidGlass {
   private static final float THICKNESS_DP = 30f;
   private static final float DISPERSION = 0.08f;
   private static final float SPECULAR = 0.35f;
+  // Use the same fixed blur treatment as Lunaris for the Penguin glass surfaces instead of
+  // the dynamic lens shader. This keeps the two dialer styles visually consistent.
+  private static final boolean STATIC_BLUR = true;
 
   private static final String BEND_SHADER =
       "uniform shader content;\n"
@@ -184,7 +187,9 @@ public final class LiquidGlass {
             backdrop.post(
                 () -> {
                   backdrop.setLayoutParams(lp);
-                  bend(backdrop, width, height);
+                  if (!STATIC_BLUR) {
+                    bend(backdrop, width, height);
+                  }
                 });
           }
         });

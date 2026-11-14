@@ -25,11 +25,16 @@ import android.telecom.Call;
 import android.telecom.CallAudioState;
 import android.telecom.InCallService;
 
+import com.android.dialer.common.LogUtil;
+import com.android.dialer.universaldialer.UniversalDialer;
 import com.android.incallui.audiomode.AudioModeProvider;
 import com.android.incallui.call.CallList;
 import com.android.incallui.call.CallRecorder;
 import com.android.incallui.call.ExternalCallList;
 import com.android.incallui.call.TelecomAdapter;
+
+import java.util.HashSet;
+import java.util.Set;
 
 /**
  * Used to receive updates about calls from the Telecom component. This service is bound to Telecom
@@ -38,6 +43,8 @@ import com.android.incallui.call.TelecomAdapter;
  * service triggering InCallActivity (via CallList) to finish soon after.
  */
 public class InCallServiceImpl extends InCallService {
+
+  private final Set<Call> ignoredCalls = new HashSet<>();
 
   @Override
   public void onCallAudioStateChanged(CallAudioState audioState) {
@@ -56,15 +63,28 @@ public class InCallServiceImpl extends InCallService {
   @Override
   public void onCallAdded(Call call) {
     Trace.beginSection("InCallServiceImpl.onCallAdded");
+    UniversalDialer.onCallAdded(call);
+    if (!UniversalDialer.shouldHandle(this, call)) {
+      LogUtil.i("InCallServiceImpl.onCallAdded", "leaving VoIP call to its app");
+      ignoredCalls.add(call);
+      Trace.endSection();
+      return;
+    }
     InCallPresenter.getInstance().onCallAdded(call);
+    UniversalDialer.onCallShown(call, true);
     Trace.endSection();
   }
 
   @Override
   public void onCallRemoved(Call call) {
     Trace.beginSection("InCallServiceImpl.onCallRemoved");
-
+    UniversalDialer.onCallRemoved(call);
+    if (ignoredCalls.remove(call)) {
+      Trace.endSection();
+      return;
+    }
     InCallPresenter.getInstance().onCallRemoved(call);
+    UniversalDialer.onCallShown(call, false);
     Trace.endSection();
   }
 

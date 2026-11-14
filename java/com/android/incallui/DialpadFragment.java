@@ -33,11 +33,11 @@ import android.widget.EditText;
 import android.widget.LinearLayout;
 
 import com.android.dialer.R;
-import com.android.dialer.dialpadview.SpecialCharSequenceMgr;
 import com.android.dialer.common.LogUtil;
 import com.android.dialer.dialpadview.DialpadKeyButton;
 import com.android.dialer.dialpadview.DialpadKeyButton.OnPressedListener;
 import com.android.dialer.dialpadview.DialpadView;
+import com.android.dialer.dialpadview.SpecialCharSequenceMgr;
 import com.android.incallui.DialpadPresenter.DialpadUi;
 import com.android.incallui.baseui.BaseFragment;
 
@@ -91,7 +91,7 @@ public class DialpadFragment extends BaseFragment<DialpadPresenter, DialpadUi>
 
   @Override
   public void onClick(View v) {
-    if (v.getId() == R.id.dialpad_back) {
+    if (v.getId() == R.id.dialpad_hide) {
       getActivity().onBackPressed();
     }
   }
@@ -140,6 +140,7 @@ public class DialpadFragment extends BaseFragment<DialpadPresenter, DialpadUi>
     LayoutInflater layoutInflater = inflater.cloneInContext(contextThemeWrapper);
     final View parent = layoutInflater.inflate(R.layout.incall_dialpad_fragment, container, false);
     dialpadView = parent.findViewById(R.id.dialpad_view);
+    dialpadView.setVisibility(View.VISIBLE);
     dialpadView.setCanDigitsBeEdited(false);
     dtmfDialerField = parent.findViewById(R.id.digits);
     if (dtmfDialerField != null) {
@@ -152,13 +153,14 @@ public class DialpadFragment extends BaseFragment<DialpadPresenter, DialpadUi>
       dtmfDialerField.setElegantTextHeight(false);
       configureKeypadListeners();
     }
-    View backButton = dialpadView.findViewById(R.id.dialpad_back);
-    backButton.setVisibility(View.VISIBLE);
-    backButton.setOnClickListener(this);
     endCallSpace = dialpadView.findViewById(R.id.end_call_space);
+    View hideButton = dialpadView.findViewById(R.id.dialpad_hide);
+    hideButton.setVisibility(View.VISIBLE);
+    hideButton.setOnClickListener(this);
 
-    return com.android.dialer.expressive.ComposeInCallDialpad.create(this, dtmfDialerField);
+    return parent;
   }
+
 
   @Override
   public void onResume() {
@@ -200,10 +202,6 @@ public class DialpadFragment extends BaseFragment<DialpadPresenter, DialpadUi>
     } else {
       getPresenter().stopDtmf();
     }
-  }
-
-  public void animateShowDialpad() {
-
   }
 
   @Override

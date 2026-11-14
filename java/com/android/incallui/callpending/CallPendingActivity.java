@@ -122,7 +122,7 @@ public class CallPendingActivity extends FragmentActivity
   @Override
   protected void onStart() {
     super.onStart();
-    InCallScreen inCallScreen = InCallBindings.createInCallScreen();
+    InCallScreen inCallScreen = InCallBindings.createInCallScreen(this);
     getSupportFragmentManager()
         .beginTransaction()
         .add(R.id.main, inCallScreen.getInCallScreenFragment(), TAG_IN_CALL_SCREEN)

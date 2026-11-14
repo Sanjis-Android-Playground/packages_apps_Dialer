@@ -27,14 +27,15 @@ import static com.android.incallui.NotificationBroadcastReceiver.ACTION_ANSWER_V
 import static com.android.incallui.NotificationBroadcastReceiver.ACTION_DECLINE_INCOMING_CALL;
 import static com.android.incallui.NotificationBroadcastReceiver.ACTION_DECLINE_VIDEO_UPGRADE_REQUEST;
 import static com.android.incallui.NotificationBroadcastReceiver.ACTION_HANG_UP_ONGOING_CALL;
-import static com.android.incallui.NotificationBroadcastReceiver.ACTION_MUTE_ONGOING_CALL;
-import static com.android.incallui.NotificationBroadcastReceiver.ACTION_UNMUTE_ONGOING_CALL;
+import static com.android.incallui.NotificationBroadcastReceiver.ACTION_MUTE;
 import static com.android.incallui.NotificationBroadcastReceiver.ACTION_TURN_OFF_SPEAKER;
 import static com.android.incallui.NotificationBroadcastReceiver.ACTION_TURN_ON_SPEAKER;
+import static com.android.incallui.NotificationBroadcastReceiver.ACTION_UNMUTE;
 
 import android.Manifest;
 import android.annotation.SuppressLint;
 import android.app.Notification;
+import android.app.Notification.CallStyle;
 import android.app.PendingIntent;
 import android.app.Person;
 import android.app.admin.DevicePolicyManager;
@@ -47,7 +48,6 @@ import android.graphics.drawable.Drawable;
 import android.graphics.drawable.Icon;
 import android.media.AudioAttributes;
 import android.net.Uri;
-import android.os.Bundle;
 import android.os.Trace;
 import android.telecom.Call.Details;
 import android.telecom.CallAudioState;
@@ -288,10 +288,9 @@ public class StatusBarNotifier
         || callState == DialerCallState.CALL_WAITING
         || isVideoUpgradeRequest) {
         notificationType =
-            callState == DialerCallState.CALL_WAITING
-                    || !InCallPresenter.getInstance().isShowingInCallUi()
-                ? NOTIFICATION_INCOMING_CALL
-                : NOTIFICATION_INCOMING_CALL_QUIET;
+            InCallPresenter.getInstance().isShowingInCallUi()
+                ? NOTIFICATION_INCOMING_CALL_QUIET
+                : NOTIFICATION_INCOMING_CALL;
     } else {
       notificationType = NOTIFICATION_IN_CALL;
     }
@@ -314,6 +313,12 @@ public class StatusBarNotifier
     if (largeIcon != null) {
       largeIcon = getRoundedIcon(largeIcon);
     }
+
+    Person callerPerson = new Person.Builder()
+        .setName(contentTitle)
+        .setIcon(largeIcon != null ? Icon.createWithBitmap(largeIcon) : null)
+        .setUri(contactInfo.lookupUri != null ? contactInfo.lookupUri.toString() : null)
+        .build();
 
     // This builder is used for the notification shown when the device is locked and the user
     // has set their notification settings to 'hide sensitive content'
@@ -338,6 +343,12 @@ public class StatusBarNotifier
     switch (notificationType) {
       case NOTIFICATION_INCOMING_CALL:
         builder.setChannelId(NotificationChannelId.INCOMING_CALL);
+        builder.setStyle(Notification.CallStyle.forIncomingCall(
+            callerPerson,
+            createNotificationPendingIntent(context, ACTION_DECLINE_INCOMING_CALL),
+            createNotificationPendingIntent(context, ACTION_ANSWER_VOICE_INCOMING_CALL))
+            .setAnswerButtonColorHint(context.getColor(R.color.notification_action_accept))
+            .setDeclineButtonColorHint(context.getColor(R.color.notification_action_dismiss)));
         // Set the intent as a full screen intent as well if a call is incoming
         configureFullScreenIntent(builder, createLaunchPendingIntent(true /* isFullScreen */));
         // Set the notification category and bump the priority for incoming calls
@@ -353,13 +364,24 @@ public class StatusBarNotifier
         break;
       case NOTIFICATION_INCOMING_CALL_QUIET:
         builder.setChannelId(NotificationChannelId.ONGOING_CALL);
-        builder.setCategory(Notification.CATEGORY_CALL);
+        builder.setStyle(Notification.CallStyle.forIncomingCall(
+            callerPerson,
+            createNotificationPendingIntent(context, ACTION_DECLINE_INCOMING_CALL),
+            createNotificationPendingIntent(context, ACTION_ANSWER_VOICE_INCOMING_CALL))
+            .setAnswerButtonColorHint(context.getColor(R.color.notification_action_accept))
+            .setDeclineButtonColorHint(context.getColor(R.color.notification_action_dismiss)));
         break;
       case NOTIFICATION_IN_CALL:
         publicBuilder.setColorized(true);
+        builder.setColorized(true);
         builder.setChannelId(NotificationChannelId.ONGOING_CALL);
-        builder.setRequestPromotedOngoing(true);
-        builder.setCategory(Notification.CATEGORY_CALL);
+        if (hasHangup(callState)) {
+          // Lets System UI recognise the call (status bar call chip, dynamic island).
+          builder.setStyle(Notification.CallStyle.forOngoingCall(
+              callerPerson,
+              createNotificationPendingIntent(context, ACTION_HANG_UP_ONGOING_CALL)));
+          builder.setCategory(Notification.CATEGORY_CALL);
+        }
         break;
       default:
         break;
@@ -380,7 +402,6 @@ public class StatusBarNotifier
       createIncomingCallNotification(call, callState, callAudioState, builder);
     }
 
-    addPersonReference(builder, contactInfo, call);
 
     Trace.beginSection("fire notification");
     // Fire off the notification
@@ -418,44 +439,17 @@ public class StatusBarNotifier
       DialerCall call, int state, CallAudioState callAudioState, Notification.Builder builder) {
     setNotificationWhen(call, state, builder);
 
-    if (state == DialerCallState.ACTIVE
-        || state == DialerCallState.ONHOLD
-        || DialerCallState.isDialing(state)) {
-      addHangupAction(builder);
-      addSpeakerAction(builder, callAudioState);
+    // Active calls (active | onhold) and outgoing calls (dialing) use CallStyle, which already
+    // has the hang up button.
+    if (hasHangup(state)) {
       addMuteAction(builder, callAudioState);
-      builder.addExtras(createHangUpExtras());
+      addSpeakerAction(builder, callAudioState);
     } else if (state == DialerCallState.INCOMING || state == DialerCallState.CALL_WAITING) {
-      addDismissAction(builder);
       if (call.isVideoCall()) {
-        addVideoCallAction(builder);
-        builder.addExtras(createIncomingCallExtras(true /* isVideo */));
+        addVideoCallAction(builder); // Keep this if it's a video call specific action not covered by CallStyle
       } else {
-        addAnswerAction(builder);
-        builder.addExtras(createIncomingCallExtras(false /* isVideo */));
       }
     }
-  }
-
-  private Bundle createIncomingCallExtras(boolean isVideo) {
-    PendingIntent answerIntent = createNotificationPendingIntent(
-        context,
-        isVideo ? ACTION_ANSWER_VIDEO_INCOMING_CALL : ACTION_ANSWER_VOICE_INCOMING_CALL);
-    PendingIntent declineIntent = createNotificationPendingIntent(
-        context, ACTION_DECLINE_INCOMING_CALL);
-    Bundle extras = new Bundle();
-    extras.putInt(Notification.EXTRA_CALL_TYPE, Notification.CallStyle.CALL_TYPE_INCOMING);
-    extras.putParcelable(Notification.EXTRA_ANSWER_INTENT, answerIntent);
-    extras.putParcelable(Notification.EXTRA_DECLINE_INTENT, declineIntent);
-    return extras;
-  }
-
-  private Bundle createHangUpExtras() {
-    PendingIntent hangUpIntent = createNotificationPendingIntent(
-        context, ACTION_HANG_UP_ONGOING_CALL);
-    Bundle extras = new Bundle();
-    extras.putParcelable(Notification.EXTRA_HANG_UP_INTENT, hangUpIntent);
-    return extras;
   }
 
   /**
@@ -572,22 +566,6 @@ public class StatusBarNotifier
               .unicodeWrap(contactInfo.number, TextDirectionHeuristics.LTR);
     }
     return preferredName;
-  }
-
-  private void addPersonReference(
-      Notification.Builder builder, ContactCacheEntry contactInfo, DialerCall call) {
-    // Query {@link Contacts#CONTENT_LOOKUP_URI} directly with work lookup key is not allowed.
-    // So, do not pass {@link Contacts#CONTENT_LOOKUP_URI} to NotificationManager to avoid
-    // NotificationManager using it.
-    String uri = null;
-    if (contactInfo.lookupUri != null && contactInfo.userType != ContactsUtils.USER_TYPE_WORK) {
-      uri = contactInfo.lookupUri.toString();
-    } else if (!TextUtils.isEmpty(call.getNumber())) {
-      uri = Uri.fromParts(PhoneAccount.SCHEME_TEL, call.getNumber(), null).toString();
-    }
-    if (uri != null) {
-      builder.addPerson(new Person.Builder().setUri(uri).build());
-    }
   }
 
   /** Gets a large icon from the contact info object to display in the notification. */
@@ -830,17 +808,24 @@ public class StatusBarNotifier
             .build());
   }
 
-  private void addHangupAction(Notification.Builder builder) {
-    LogUtil.d(
-        "StatusBarNotifier.addHangupAction",
-        "will show \"hang-up\" action in the ongoing active call Notification");
-    PendingIntent hangupPendingIntent =
-        createNotificationPendingIntent(context, ACTION_HANG_UP_ONGOING_CALL);
+  private static boolean hasHangup(int state) {
+    return state == DialerCallState.ACTIVE
+        || state == DialerCallState.ONHOLD
+        || DialerCallState.isDialing(state);
+  }
+
+  private void addMuteAction(Notification.Builder builder, CallAudioState callAudioState) {
+    boolean muted = callAudioState.isMuted();
     builder.addAction(
         new Notification.Action.Builder(
-                Icon.createWithResource(context, R.drawable.quantum_ic_call_end_vd_theme_24),
-                context.getText(R.string.notification_action_end_call),
-                hangupPendingIntent)
+                Icon.createWithResource(
+                    context,
+                    muted
+                        ? R.drawable.quantum_ic_mic_off_vd_theme_24
+                        : R.drawable.quantum_ic_mic_vd_theme_24),
+                context.getText(
+                    muted ? R.string.notification_action_unmute : R.string.notification_action_mute),
+                createNotificationPendingIntent(context, muted ? ACTION_UNMUTE : ACTION_MUTE))
             .build());
   }
 
@@ -882,30 +867,6 @@ public class StatusBarNotifier
                 Icon.createWithResource(context, R.drawable.quantum_ic_phone_in_talk_vd_theme_24),
                 context.getText(R.string.notification_action_speaker_off),
                 speakerOffPendingIntent)
-            .build());
-  }
-
-  private void addMuteAction(Notification.Builder builder, CallAudioState callAudioState) {
-    boolean isMuted = callAudioState.isMuted();
-    String action = isMuted ? "unmute" : "mute";
-    LogUtil.d(
-        "StatusBarNotifier.addMuteAction",
-        "will show \"" + action + "\" action in the ongoing active call Notification");
-    PendingIntent mutePendingIntent =
-        createNotificationPendingIntent(
-            context, isMuted ? ACTION_UNMUTE_ONGOING_CALL : ACTION_MUTE_ONGOING_CALL);
-    builder.addAction(
-        new Notification.Action.Builder(
-                Icon.createWithResource(
-                    context,
-                    isMuted
-                        ? R.drawable.quantum_ic_mic_vd_theme_24
-                        : R.drawable.quantum_ic_mic_off_vd_theme_24),
-                context.getText(
-                    isMuted
-                        ? R.string.notification_action_unmute
-                        : R.string.notification_action_mute),
-                mutePendingIntent)
             .build());
   }
 

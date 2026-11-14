@@ -11,18 +11,22 @@
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
- * limitations under the License
+ * limitations under the License.
  */
 
 package com.android.incallui.answer.bindings;
 
+import android.content.Context;
+
+import com.android.dialer.util.DialerUiStyle;
 import com.android.incallui.answer.impl.AnswerFragment;
 import com.android.incallui.answer.protocol.AnswerScreen;
 
-/** Bindings for answer module. */
+/** Bindings for the answer module. */
 public class AnswerBindings {
 
   public static AnswerScreen createAnswerScreen(
+      Context context,
       String callId,
       boolean isRttCall,
       boolean isVideoCall,
@@ -30,7 +34,10 @@ public class AnswerBindings {
       boolean isSelfManagedCamera,
       boolean allowAnswerAndRelease,
       boolean hasCallOnHold) {
-    if (!isRttCall && !isVideoCall && !isVideoUpgradeRequest) {
+    if (!DialerUiStyle.isPenguin(context)
+        && !isRttCall
+        && !isVideoCall
+        && !isVideoUpgradeRequest) {
       return com.android.dialer.expressive.ExpressiveAnswerFragment.create(
           callId, allowAnswerAndRelease);
     }

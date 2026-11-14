@@ -17,7 +17,6 @@
 
 package com.android.incallui;
 
-import android.app.Activity;
 import android.app.ActivityManager;
 import android.app.ActivityManager.AppTask;
 import android.app.ActivityManager.TaskDescription;
@@ -29,7 +28,6 @@ import android.content.Intent;
 import android.content.res.Configuration;
 import android.graphics.drawable.GradientDrawable;
 import android.graphics.drawable.GradientDrawable.Orientation;
-import android.os.Build;
 import android.os.Bundle;
 import android.os.Trace;
 import android.telecom.Call;
@@ -42,8 +40,6 @@ import android.view.MenuItem;
 import android.view.MotionEvent;
 import android.view.View;
 import android.view.WindowManager;
-import android.view.animation.Animation;
-import android.view.animation.AnimationUtils;
 import android.widget.CheckBox;
 import android.widget.Toast;
 
@@ -54,15 +50,14 @@ import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.core.content.res.ResourcesCompat;
 import androidx.core.graphics.ColorUtils;
+import androidx.core.view.WindowCompat;
+import androidx.core.view.WindowInsetsControllerCompat;
 import androidx.fragment.app.DialogFragment;
 import androidx.fragment.app.FragmentManager;
 import androidx.fragment.app.FragmentTransaction;
-import androidx.preference.PreferenceManager;
 
 import com.android.contacts.common.widget.SelectPhoneAccountDialogFragment;
 import com.android.dialer.R;
-import com.android.dialer.animation.AnimUtils;
-import com.android.dialer.animation.AnimationListenerAdapter;
 import com.android.dialer.common.Assert;
 import com.android.dialer.common.LogUtil;
 import com.android.dialer.common.concurrent.DialerExecutorComponent;
@@ -71,7 +66,6 @@ import com.android.dialer.preferredsim.PreferredAccountRecorder;
 import com.android.dialer.preferredsim.PreferredAccountWorker;
 import com.android.dialer.preferredsim.PreferredAccountWorker.Result;
 import com.android.dialer.preferredsim.PreferredSimComponent;
-import com.android.dialer.util.ViewUtil;
 import com.android.incallui.answer.bindings.AnswerBindings;
 import com.android.incallui.answer.protocol.AnswerScreen;
 import com.android.incallui.answer.protocol.AnswerScreenDelegate;
@@ -128,13 +122,10 @@ public class InCallActivity extends TransactionSafeFragmentActivity
   private static final int DIALPAD_REQUEST_NONE = 1;
   private static final int DIALPAD_REQUEST_SHOW = 2;
   private static final int DIALPAD_REQUEST_HIDE = 3;
-  private static final String PREF_HIDE_CALL_STATUS_BAR = "hide_call_status_bar";
 
   private SelectPhoneAccountListener selectPhoneAccountListener;
   private SupportUiListener<Result> preferredAccountWorkerResultListener;
 
-  private Animation dialpadSlideInAnimation;
-  private Animation dialpadSlideOutAnimation;
   private Dialog errorDialog;
   private GradientDrawable backgroundDrawable;
   private InCallOrientationEventListener inCallOrientationEventListener;
@@ -171,6 +162,12 @@ public class InCallActivity extends TransactionSafeFragmentActivity
   }
 
   @Override
+  public void onConfigurationChanged(@NonNull Configuration newConfig) {
+    super.onConfigurationChanged(newConfig);
+    recreate();
+  }
+
+  @Override
   protected void onResumeFragments() {
     super.onResumeFragments();
     if (needDismissPendingDialogs) {
@@ -181,7 +178,6 @@ public class InCallActivity extends TransactionSafeFragmentActivity
   @Override
   protected void onCreate(Bundle bundle) {
     Trace.beginSection("InCallActivity.onCreate");
-    updateStatusBarVisibility();
     super.onCreate(bundle);
 
     preferredAccountWorkerResultListener =
@@ -199,32 +195,9 @@ public class InCallActivity extends TransactionSafeFragmentActivity
 
     setWindowFlags();
     setContentView(R.layout.incall_screen);
-    internalResolveIntent(getIntent());
 
-    boolean isLandscape =
-        getResources().getConfiguration().orientation == Configuration.ORIENTATION_LANDSCAPE;
-    boolean isRtl = ViewUtil.isRtl();
-    if (isLandscape) {
-      dialpadSlideInAnimation =
-          AnimationUtils.loadAnimation(
-              this, isRtl ? R.anim.dialpad_slide_in_left : R.anim.dialpad_slide_in_right);
-      dialpadSlideOutAnimation =
-          AnimationUtils.loadAnimation(
-              this, isRtl ? R.anim.dialpad_slide_out_left : R.anim.dialpad_slide_out_right);
-    } else {
-      dialpadSlideInAnimation = AnimationUtils.loadAnimation(this, R.anim.dialpad_slide_in_bottom);
-      dialpadSlideOutAnimation =
-          AnimationUtils.loadAnimation(this, R.anim.dialpad_slide_out_bottom);
-    }
-    dialpadSlideInAnimation.setInterpolator(AnimUtils.EASE_IN);
-    dialpadSlideOutAnimation.setInterpolator(AnimUtils.EASE_OUT);
-    dialpadSlideOutAnimation.setAnimationListener(
-        new AnimationListenerAdapter() {
-          @Override
-          public void onAnimationEnd(Animation animation) {
-            hideDialpadFragment();
-          }
-        });
+
+    internalResolveIntent(getIntent());
 
     if (bundle != null && showDialpadRequest == DIALPAD_REQUEST_NONE) {
       // If the dialpad was shown before, set related variables so that it can be shown and
@@ -272,15 +245,6 @@ public class InCallActivity extends TransactionSafeFragmentActivity
     }
 
     getWindow().addFlags(flags);
-  }
-
-  private void updateStatusBarVisibility() {
-    if (PreferenceManager.getDefaultSharedPreferences(this)
-        .getBoolean(PREF_HIDE_CALL_STATUS_BAR, true)) {
-      getWindow().addFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN);
-    } else {
-      getWindow().clearFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN);
-    }
   }
 
   private static int getAudioRoute() {
@@ -460,7 +424,6 @@ public class InCallActivity extends TransactionSafeFragmentActivity
   protected void onResume() {
     Trace.beginSection("InCallActivity.onResume");
     super.onResume();
-    updateStatusBarVisibility();
 
     if (!InCallPresenter.getInstance().isReadyForTearDown()) {
       updateTaskDescription();
@@ -577,19 +540,7 @@ public class InCallActivity extends TransactionSafeFragmentActivity
       // It's also necessary in the sense of it's excluded from recents. So whenever the activity
       // finishes, the task should also be removed since it doesn't make sense to go back to it in
       // anyway anymore.
-      boolean animateClose =
-          isVisible
-              && !isChangingConfigurations()
-              && !isRecreating
-              && !CallList.getInstance().hasLiveCall();
-      if (animateClose && Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
-        overrideActivityTransition(
-            Activity.OVERRIDE_TRANSITION_CLOSE, R.anim.incall_close_enter, R.anim.incall_close_exit);
-      }
       super.finishAndRemoveTask();
-      if (animateClose && Build.VERSION.SDK_INT < Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
-        overridePendingTransition(R.anim.incall_close_enter, R.anim.incall_close_exit);
-      }
     }
   }
 
@@ -779,6 +730,7 @@ public class InCallActivity extends TransactionSafeFragmentActivity
     }
   }
 
+
   public void showDialpadFragment(boolean show, boolean animate) {
     if (show == isDialpadVisible()) {
       return;
@@ -790,20 +742,10 @@ public class InCallActivity extends TransactionSafeFragmentActivity
       return;
     }
 
-    if (!animate) {
-      if (show) {
-        showDialpadFragment();
-      } else {
-        hideDialpadFragment();
-      }
+    if (show) {
+      showDialpadFragment();
     } else {
-      if (show) {
-        showDialpadFragment();
-        getDialpadFragment().animateShowDialpad();
-      }
-      getDialpadFragment()
-          .getView()
-          .startAnimation(show ? dialpadSlideInAnimation : dialpadSlideOutAnimation);
+      hideDialpadFragment();
     }
 
     ProximitySensor sensor = InCallPresenter.getInstance().getProximitySensor();
@@ -920,7 +862,7 @@ public class InCallActivity extends TransactionSafeFragmentActivity
     boolean backgroundDirty = false;
     if (backgroundDrawable == null) {
       backgroundDrawableColors = new int[] {top, middle, bottom};
-      backgroundDrawable = new GradientDrawable(Orientation.TOP_BOTTOM, backgroundDrawableColors);
+      backgroundDrawable = new GradientDrawable(Orientation.TL_BR, backgroundDrawableColors);
       backgroundDirty = true;
     } else {
       if (backgroundDrawableColors[0] != top) {
@@ -942,7 +884,15 @@ public class InCallActivity extends TransactionSafeFragmentActivity
 
     if (backgroundDirty) {
       getWindow().setBackgroundDrawable(backgroundDrawable);
+      updateSystemBarAppearance(top, bottom);
     }
+  }
+
+  private void updateSystemBarAppearance(@ColorInt int top, @ColorInt int bottom) {
+    WindowInsetsControllerCompat insetsController =
+        WindowCompat.getInsetsController(getWindow(), getWindow().getDecorView());
+    insetsController.setAppearanceLightStatusBars(ColorUtils.calculateLuminance(top) > 0.5);
+    insetsController.setAppearanceLightNavigationBars(ColorUtils.calculateLuminance(bottom) > 0.5);
   }
 
   public boolean isVisible() {
@@ -1379,6 +1329,7 @@ public class InCallActivity extends TransactionSafeFragmentActivity
     // Show a new answer screen.
     AnswerScreen answerScreen =
         AnswerBindings.createAnswerScreen(
+            this,
             call.getId(),
             call.isActiveRttCall(),
             call.isVideoCall(),
@@ -1426,7 +1377,7 @@ public class InCallActivity extends TransactionSafeFragmentActivity
     if (didShowInCallScreen) {
       return false;
     }
-    InCallScreen inCallScreen = InCallBindings.createInCallScreen();
+    InCallScreen inCallScreen = InCallBindings.createInCallScreen(getApplicationContext());
     transaction.add(R.id.main, inCallScreen.getInCallScreenFragment(), Tags.IN_CALL_SCREEN);
     didShowInCallScreen = true;
     return true;

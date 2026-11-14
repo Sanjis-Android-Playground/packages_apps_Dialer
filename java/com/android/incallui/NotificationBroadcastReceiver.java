@@ -52,10 +52,6 @@ public class NotificationBroadcastReceiver extends BroadcastReceiver {
 
   public static final String ACTION_HANG_UP_ONGOING_CALL =
       "com.android.incallui.ACTION_HANG_UP_ONGOING_CALL";
-  public static final String ACTION_MUTE_ONGOING_CALL =
-      "com.android.incallui.ACTION_MUTE_ONGOING_CALL";
-  public static final String ACTION_UNMUTE_ONGOING_CALL =
-      "com.android.incallui.ACTION_UNMUTE_ONGOING_CALL";
   public static final String ACTION_ANSWER_VIDEO_INCOMING_CALL =
       "com.android.incallui.ACTION_ANSWER_VIDEO_INCOMING_CALL";
   public static final String ACTION_ANSWER_VOICE_INCOMING_CALL =
@@ -67,6 +63,8 @@ public class NotificationBroadcastReceiver extends BroadcastReceiver {
   public static final String ACTION_TURN_ON_SPEAKER = "com.android.incallui.ACTION_TURN_ON_SPEAKER";
   public static final String ACTION_TURN_OFF_SPEAKER =
       "com.android.incallui.ACTION_TURN_OFF_SPEAKER";
+  public static final String ACTION_MUTE = "com.android.incallui.ACTION_MUTE";
+  public static final String ACTION_UNMUTE = "com.android.incallui.ACTION_UNMUTE";
 
   public static final String ACTION_PULL_EXTERNAL_CALL =
       "com.android.incallui.ACTION_PULL_EXTERNAL_CALL";
@@ -89,10 +87,6 @@ public class NotificationBroadcastReceiver extends BroadcastReceiver {
       declineIncomingCall();
     } else if (action.equals(ACTION_HANG_UP_ONGOING_CALL)) {
       hangUpOngoingCall();
-    } else if (action.equals(ACTION_MUTE_ONGOING_CALL)) {
-      TelecomAdapter.getInstance().mute(true);
-    } else if (action.equals(ACTION_UNMUTE_ONGOING_CALL)) {
-      TelecomAdapter.getInstance().mute(false);
     } else if (action.equals(ACTION_ACCEPT_VIDEO_UPGRADE_REQUEST)) {
       acceptUpgradeRequest(context);
     } else if (action.equals(ACTION_DECLINE_VIDEO_UPGRADE_REQUEST)) {
@@ -105,6 +99,10 @@ public class NotificationBroadcastReceiver extends BroadcastReceiver {
       TelecomAdapter.getInstance().setAudioRoute(CallAudioState.ROUTE_SPEAKER);
     } else if (action.equals(ACTION_TURN_OFF_SPEAKER)) {
       TelecomAdapter.getInstance().setAudioRoute(CallAudioState.ROUTE_WIRED_OR_EARPIECE);
+    } else if (action.equals(ACTION_MUTE)) {
+      TelecomAdapter.getInstance().mute(true);
+    } else if (action.equals(ACTION_UNMUTE)) {
+      TelecomAdapter.getInstance().mute(false);
     }
   }
 

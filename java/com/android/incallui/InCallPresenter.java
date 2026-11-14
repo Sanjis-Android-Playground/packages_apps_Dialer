@@ -20,12 +20,10 @@ package com.android.incallui;
 import android.annotation.SuppressLint;
 import android.content.Context;
 import android.content.Intent;
-import android.content.SharedPreferences;
 import android.graphics.Point;
 import android.net.Uri;
 import android.os.Bundle;
 import android.os.Trace;
-import android.preference.PreferenceManager;
 import android.provider.BlockedNumberContract;
 import android.telecom.Call;
 import android.telecom.Call.Details;
@@ -54,6 +52,7 @@ import com.android.dialer.common.LogUtil;
 import com.android.dialer.common.concurrent.DialerExecutorComponent;
 import com.android.dialer.postcall.PostCall;
 import com.android.dialer.telecom.TelecomUtil;
+import com.android.dialer.universaldialer.UniversalDialer;
 import com.android.dialer.util.EmergencyCallUtil;
 import com.android.dialer.util.TouchPointManager;
 import com.android.incallui.InCallOrientationEventListener.ScreenOrientation;
@@ -87,11 +86,9 @@ import java.util.concurrent.CopyOnWriteArrayList;
  * presenters that want to listen in on the in-call state changes. TODO: This class has become more
  * of a state machine at this point. Consider renaming.
  */
-public class InCallPresenter implements CallList.Listener, AudioModeProvider.AudioModeListener,
-        AccelerometerListener.ChangeListener {
+public class InCallPresenter implements CallList.Listener, AudioModeProvider.AudioModeListener {
 
   private static final Bundle EMPTY_EXTRAS = new Bundle();
-  private static final String AUTO_ANSWER_EXTERNAL_AUDIO = "auto_answer_external_audio";
 
   private static InCallPresenter inCallPresenter;
 
@@ -119,7 +116,6 @@ public class InCallPresenter implements CallList.Listener, AudioModeProvider.Aud
   private InCallVibrationHandler vibrationHandler;
   private InCallDndHandler dndHandler;
   private ContactInfoCache contactInfoCache;
-  private CallerNameAnnouncement callerNameAnnouncement;
   private Context context;
   private CallList callList;
   private ExternalCallList externalCallList;
@@ -177,7 +173,6 @@ public class InCallPresenter implements CallList.Listener, AudioModeProvider.Aud
       };
   private InCallState inCallState = InCallState.NO_CALLS;
   private ProximitySensor proximitySensor;
-  private AccelerometerListener mAccelerometerListener;
   private final PseudoScreenState pseudoScreenState = new PseudoScreenState();
   private boolean serviceConnected;
   private InCallCameraManager inCallCameraManager;
@@ -309,8 +304,6 @@ public class InCallPresenter implements CallList.Listener, AudioModeProvider.Aud
     this.context = context;
 
     this.contactInfoCache = contactInfoCache;
-    callerNameAnnouncement = new CallerNameAnnouncement(context, contactInfoCache);
-    addListener(callerNameAnnouncement);
 
     this.statusBarNotifier = statusBarNotifier;
     this.externalCallNotifier = externalCallNotifier;
@@ -324,7 +317,6 @@ public class InCallPresenter implements CallList.Listener, AudioModeProvider.Aud
 
     this.proximitySensor = proximitySensor;
     addListener(this.proximitySensor);
-    mAccelerometerListener = new AccelerometerListener(context, this);
 
     if (themeColorManager == null) {
       themeColorManager = new ThemeColorManager(new InCallUIMaterialColorMapUtils(this.context));
@@ -375,11 +367,6 @@ public class InCallPresenter implements CallList.Listener, AudioModeProvider.Aud
   public void tearDown() {
     LogUtil.d("InCallPresenter.tearDown", "tearDown");
     callList.clearOnDisconnect();
-    if (callerNameAnnouncement != null) {
-      removeListener(callerNameAnnouncement);
-      callerNameAnnouncement.destroy();
-      callerNameAnnouncement = null;
-    }
 
     serviceConnected = false;
 
@@ -648,10 +635,6 @@ public class InCallPresenter implements CallList.Listener, AudioModeProvider.Aud
     LogUtil.d(
         "InCallPresenter.onCallListChange", "onCallListChange newState changed to " + newState);
 
-    if (!newState.isIncoming() && mAccelerometerListener != null) {
-        mAccelerometerListener.enable(false);
-    }
-
     // Set the new state before announcing it to the world
     LogUtil.i(
         "InCallPresenter.onCallListChange",
@@ -749,12 +732,6 @@ public class InCallPresenter implements CallList.Listener, AudioModeProvider.Aud
     LogUtil.i(
         "InCallPresenter.onIncomingCall", "Phone switching state: " + oldState + " -> " + newState);
     inCallState = newState;
-    boolean autoAnswered = maybeAutoAnswerOnExternalAudio(call, newState);
-    if (!autoAnswered && callerNameAnnouncement != null) callerNameAnnouncement.start(call);
-
-    if (newState.isIncoming() && mAccelerometerListener != null) {
-        mAccelerometerListener.enable(true);
-    }
 
     Trace.beginSection("listener.onIncomingCall");
     for (IncomingCallListener listener : incomingCallListeners) {
@@ -769,36 +746,6 @@ public class InCallPresenter implements CallList.Listener, AudioModeProvider.Aud
     }
     Trace.endSection();
     Trace.endSection();
-  }
-
-  private boolean maybeAutoAnswerOnExternalAudio(DialerCall call, InCallState state) {
-    if (call == null
-        || !state.isIncoming()
-        || call.getState() != DialerCallState.INCOMING
-        || call.hasProperty(CallCompat.Details.PROPERTY_IS_EXTERNAL_CALL)
-        || !PreferenceManager.getDefaultSharedPreferences(context)
-            .getBoolean(AUTO_ANSWER_EXTERNAL_AUDIO, false)) {
-      return false;
-    }
-
-    CallAudioState audioState = AudioModeProvider.getInstance().getAudioState();
-    int audioRoute = audioState == null ? CallAudioState.ROUTE_EARPIECE : audioState.getRoute();
-    boolean hasExternalAudio =
-        audioRoute == CallAudioState.ROUTE_BLUETOOTH
-            || audioRoute == CallAudioState.ROUTE_WIRED_HEADSET
-            || AudioModeProvider.hasExternalAudioDevice(context);
-    if (!hasExternalAudio) {
-      return false;
-    }
-
-    LogUtil.i(
-        "InCallPresenter.maybeAutoAnswerOnExternalAudio",
-        "Auto-answering incoming call on audio route " + audioRoute);
-    call.answer(VideoProfile.STATE_AUDIO_ONLY);
-    if (mAccelerometerListener != null) {
-      mAccelerometerListener.enable(false);
-    }
-    return true;
   }
 
   @Override
@@ -870,22 +817,6 @@ public class InCallPresenter implements CallList.Listener, AudioModeProvider.Aud
   private boolean isSecretCode(@Nullable String number) {
     return number != null
         && (number.length() <= 8 || number.startsWith("*#*#") || number.endsWith("#*#*"));
-  }
-
-  public void onOrientationChanged(int orientation) {
-      // ignored
-  }
-
-  @Override
-  public void onDeviceFlipped(boolean faceDown) {
-      if (!faceDown) {
-          return;
-      }
-
-      SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(context);
-      if (prefs.getBoolean("button_smart_mute", false)) {
-          TelecomUtil.silenceRinger(context);
-      }
   }
 
   /** Given the call list, return the state in which the in-call screen should be. */
@@ -1173,9 +1104,6 @@ public class InCallPresenter implements CallList.Listener, AudioModeProvider.Aud
     // (1) Attempt to answer a call
     if (incomingCall != null) {
       incomingCall.answer(VideoProfile.STATE_AUDIO_ONLY);
-      if (mAccelerometerListener != null) {
-          mAccelerometerListener.enable(false);
-      }
       return true;
     }
 
@@ -1303,6 +1231,10 @@ public class InCallPresenter implements CallList.Listener, AudioModeProvider.Aud
         Toast.makeText(context, message, Toast.LENGTH_LONG).show();
       }
     }
+  }
+
+  public void onConfigurationChanged(Context context) {
+    themeColorManager.onConfigurationChanged(context);
   }
 
   /**
@@ -1438,8 +1370,7 @@ public class InCallPresenter implements CallList.Listener, AudioModeProvider.Aud
                 PhoneAccountSuggestion.class);
 
     if (phoneAccountSuggestions == null || phoneAccountSuggestions.isEmpty()) {
-      Uri callHandle = call.getHandle();
-      String scheme = callHandle == null ? "null" : callHandle.getScheme();
+      String scheme = call.getHandle().getScheme();
       final String errorMsg =
           PhoneAccount.SCHEME_TEL.equals(scheme)
               ? context.getString(R.string.callFailed_simError)
@@ -1482,11 +1413,6 @@ public class InCallPresenter implements CallList.Listener, AudioModeProvider.Aud
         proximitySensor.tearDown();
       }
       proximitySensor = null;
-
-      if (mAccelerometerListener != null) {
-          mAccelerometerListener.enable(false);
-          mAccelerometerListener = null;
-      }
 
       if (statusBarNotifier != null) {
         removeListener(statusBarNotifier);
@@ -1569,6 +1495,9 @@ public class InCallPresenter implements CallList.Listener, AudioModeProvider.Aud
     final PhoneAccountHandle accountHandle =
             intent.getParcelableExtra(TelecomManager.EXTRA_PHONE_ACCOUNT_HANDLE,
                     PhoneAccountHandle.class);
+    if (!UniversalDialer.shouldHandleAccount(context, accountHandle)) {
+      return;
+    }
     final Point touchPoint = extras.getParcelable(TouchPointManager.TOUCH_POINT, Point.class);
 
     setBoundAndWaitingForOutgoingCall(true, accountHandle);
